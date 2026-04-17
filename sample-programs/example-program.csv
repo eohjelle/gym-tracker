@@ -1,0 +1,39 @@
+week,day,exercise,set,reps,weight,rest,group
+1,A,Squat,1,8,80,120,
+1,A,Squat,2,8,80,120,
+1,A,Squat,3,8,80,120,
+1,A,Bench Press,1,8,70,90,1
+1,A,Dumbbell Fly,1,12,15,90,1
+1,A,Bench Press,2,8,70,90,1
+1,A,Dumbbell Fly,2,12,15,90,1
+1,A,Barbell Row,1,8,65,90,
+1,A,Barbell Row,2,8,65,90,
+1,A,Barbell Row,3,8,65,90,
+1,B,Deadlift,1,5,100,180,
+1,B,Deadlift,2,5,100,180,
+1,B,Deadlift,3,5,100,180,
+1,B,Overhead Press,1,8,45,90,
+1,B,Overhead Press,2,8,45,90,
+1,B,Overhead Press,3,8,45,90,
+1,B,Pull Up,1,8,0,90,
+1,B,Pull Up,2,8,0,90,
+1,B,Pull Up,3,8,0,90,
+2,A,Squat,1,6,90,150,
+2,A,Squat,2,6,90,150,
+2,A,Squat,3,6,90,150,
+2,A,Bench Press,1,6,75,120,1
+2,A,Dumbbell Fly,1,10,17.5,90,1
+2,A,Bench Press,2,6,75,120,1
+2,A,Dumbbell Fly,2,10,17.5,90,1
+2,A,Barbell Row,1,6,70,120,
+2,A,Barbell Row,2,6,70,120,
+2,A,Barbell Row,3,6,70,120,
+2,B,Deadlift,1,5,110,180,
+2,B,Deadlift,2,5,110,180,
+2,B,Deadlift,3,5,110,180,
+2,B,Overhead Press,1,6,50,120,
+2,B,Overhead Press,2,6,50,120,
+2,B,Overhead Press,3,6,50,120,
+2,B,Pull Up,1,8,5,90,
+2,B,Pull Up,2,8,5,90,
+2,B,Pull Up,3,8,5,90,

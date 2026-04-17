@@ -1,20 +1,25 @@
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
+import { useColorScheme } from 'react-native';
+import { DatabaseProvider } from './src/context/DatabaseContext';
+import { SettingsProvider } from './src/context/SettingsContext';
+import { ActiveWorkoutProvider } from './src/context/ActiveWorkoutContext';
+import RootNavigator from './src/navigation/RootNavigator';
 
 export default function App() {
+  const colorScheme = useColorScheme();
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <DatabaseProvider>
+      <SettingsProvider>
+        <ActiveWorkoutProvider>
+          <NavigationContainer theme={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <RootNavigator />
+            <StatusBar style="auto" />
+          </NavigationContainer>
+        </ActiveWorkoutProvider>
+      </SettingsProvider>
+    </DatabaseProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
