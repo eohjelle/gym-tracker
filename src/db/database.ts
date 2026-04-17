@@ -1,8 +1,8 @@
 import { openDatabaseAsync, SQLiteDatabase } from 'expo-sqlite';
 import { migrations } from './migrations';
-import { SAMPLE_PROGRAM, TEST_PROGRAM } from './sampleProgram';
 import { ProgramDefinition } from '../utils/programParser';
 import * as programRepo from './repositories/programRepository';
+import { programs } from '../../programs';
 
 let db: SQLiteDatabase | null = null;
 
@@ -16,7 +16,7 @@ export async function initDatabase(): Promise<SQLiteDatabase> {
   await db.execAsync('PRAGMA foreign_keys = ON');
 
   await runMigrations(db);
-  await syncBuiltInPrograms(db);
+  await syncPrograms(db);
   return db;
 }
 
@@ -54,16 +54,14 @@ async function runMigrations(database: SQLiteDatabase): Promise<void> {
   }
 }
 
-const BUILT_IN_PROGRAMS: ProgramDefinition[] = [TEST_PROGRAM, SAMPLE_PROGRAM];
-
 /**
- * Sync built-in programs with the database.
+ * Sync programs from the programs/ folder with the database.
  * - Inserts programs that don't exist yet.
  * - Updates programs whose definition has changed (preserves workout history).
- * The last program in BUILT_IN_PROGRAMS becomes the active one on first install.
+ * The last program in the list becomes the active one on first install.
  */
-async function syncBuiltInPrograms(database: SQLiteDatabase): Promise<void> {
-  for (const definition of BUILT_IN_PROGRAMS) {
+async function syncPrograms(database: SQLiteDatabase): Promise<void> {
+  for (const definition of programs) {
     const json = JSON.stringify(definition);
 
     const existing = await database.getFirstAsync<{
