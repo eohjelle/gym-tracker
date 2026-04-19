@@ -8,6 +8,7 @@ export interface WorkoutRow {
   type: 'program' | 'free';
   status: 'active' | 'completed';
   program_workout_id: number | null;
+  is_deload: number; // 0 or 1
 }
 
 export interface WorkoutSetRow {

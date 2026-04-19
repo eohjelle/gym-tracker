@@ -6,6 +6,7 @@ import * as programRepo from '../db/repositories/programRepository';
 import { checkAndUpdatePRs } from '../db/repositories/personalRecordRepository';
 import { useSettings } from './SettingsContext';
 import { ProgressionResult, getProgressionForExercise } from '../services/progressionService';
+import { syncAll } from '../services/syncService';
 
 export interface ExerciseGroup {
   exerciseName: string;
@@ -31,6 +32,7 @@ interface ActiveWorkoutContextValue {
     plannedSets?: setRepo.PlannedSet[];
     programExercises?: ProgramExerciseRow[];
     progressions?: Map<string, ProgressionResult>;
+    isDeload?: boolean;
   }) => Promise<void>;
   completeSet: (
     setId: number,
@@ -123,6 +125,7 @@ export function ActiveWorkoutProvider({ children }: { children: React.ReactNode 
       plannedSets?: setRepo.PlannedSet[];
       programExercises?: ProgramExerciseRow[];
       progressions?: Map<string, ProgressionResult>;
+      isDeload?: boolean;
     }) => {
       const newWorkout = await workoutRepo.createWorkout({
         programName: params.programName,
@@ -130,6 +133,7 @@ export function ActiveWorkoutProvider({ children }: { children: React.ReactNode 
         day: params.day,
         type: params.type,
         programWorkoutId: params.programWorkoutId,
+        isDeload: params.isDeload,
       });
       setWorkout(newWorkout);
       setCurrentExerciseIndex(0);
@@ -244,6 +248,12 @@ export function ActiveWorkoutProvider({ children }: { children: React.ReactNode 
     setPendingExercise(null);
     setProgramExerciseMap(new Map());
     setProgressionMap(new Map());
+
+    // Auto-sync full backup to Supabase (fire and forget)
+    syncAll().catch((e) => {
+      console.warn('Supabase sync failed:', e.message);
+    });
+
     return workoutId;
   }, [workout]);
 

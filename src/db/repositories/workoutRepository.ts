@@ -7,13 +7,14 @@ export async function createWorkout(params: {
   day?: string;
   type: 'program' | 'free';
   programWorkoutId?: number;
+  isDeload?: boolean;
 }): Promise<WorkoutRow> {
   const db = getDatabase();
   const now = new Date().toISOString();
   const result = await db.runAsync(
-    `INSERT INTO workouts (start_time, program_name, week, day, type, status, program_workout_id)
-     VALUES (?, ?, ?, ?, ?, 'active', ?)`,
-    [now, params.programName ?? null, params.week ?? null, params.day ?? null, params.type, params.programWorkoutId ?? null]
+    `INSERT INTO workouts (start_time, program_name, week, day, type, status, program_workout_id, is_deload)
+     VALUES (?, ?, ?, ?, ?, 'active', ?, ?)`,
+    [now, params.programName ?? null, params.week ?? null, params.day ?? null, params.type, params.programWorkoutId ?? null, params.isDeload ? 1 : 0]
   );
   return {
     id: result.lastInsertRowId,
@@ -25,6 +26,7 @@ export async function createWorkout(params: {
     type: params.type,
     status: 'active',
     program_workout_id: params.programWorkoutId ?? null,
+    is_deload: params.isDeload ? 1 : 0,
   };
 }
 

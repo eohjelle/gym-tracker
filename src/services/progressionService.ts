@@ -111,7 +111,7 @@ export async function getLastTwoSessionsForExercise(
 ): Promise<{ lastSession: SessionSummary | null; prevSession: SessionSummary | null }> {
   const db = getDatabase();
 
-  // Get last 2 completed workouts containing planned working sets for this exercise
+  // Get last 2 completed non-deload workouts containing planned working sets for this exercise
   const workouts = await db.getAllAsync<{ workout_id: number }>(
     `SELECT DISTINCT ws.workout_id
      FROM workout_sets ws
@@ -121,6 +121,7 @@ export async function getLastTwoSessionsForExercise(
        AND ws.is_warmup = 0
        AND ws.is_extra = 0
        AND w.status = 'completed'
+       AND w.is_deload = 0
      ORDER BY w.start_time DESC
      LIMIT 2`,
     [exerciseName]

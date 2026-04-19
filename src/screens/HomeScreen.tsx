@@ -12,7 +12,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { useActiveWorkout } from '../context/ActiveWorkoutContext';
 import { useSettings } from '../context/SettingsContext';
-import { WorkoutRow, ProgramWorkoutRow, ProgramExerciseRow } from '../db/types';
+import { WorkoutRow, ProgramExerciseRow } from '../db/types';
 import * as workoutRepo from '../db/repositories/workoutRepository';
 import * as programRepo from '../db/repositories/programRepository';
 import { FullProgram } from '../db/repositories/programRepository';
@@ -35,7 +35,9 @@ export default function HomeScreen() {
     (WorkoutRow & { exerciseCount: number; setCount: number })[]
   >([]);
   const [fullProgram, setFullProgram] = useState<FullProgram | null>(null);
-  const [nextWorkout, setNextWorkout] = useState<(ProgramWorkoutRow & { exercises: ProgramExerciseRow[] }) | null>(null);
+  const [nextWorkoutId, setNextWorkoutId] = useState<number | null>(null);
+  const [selectedWorkoutId, setSelectedWorkoutId] = useState<number | null>(null);
+  const [deloadMode, setDeloadMode] = useState(false);
 
   const loadData = useCallback(async () => {
     const recent = await workoutRepo.getRecentWorkouts(7);
@@ -57,13 +59,15 @@ export default function HomeScreen() {
         fp.workouts
       );
       if (next) {
-        const fullNext = fp.workouts.find((w) => w.id === next.id) ?? null;
-        setNextWorkout(fullNext);
+        setNextWorkoutId(next.id);
+        setSelectedWorkoutId(next.id);
       } else {
-        setNextWorkout(null);
+        setNextWorkoutId(null);
+        setSelectedWorkoutId(fp.workouts[0]?.id ?? null);
       }
     } else {
-      setNextWorkout(null);
+      setNextWorkoutId(null);
+      setSelectedWorkoutId(null);
     }
   }, []);
 
@@ -73,22 +77,35 @@ export default function HomeScreen() {
     }, [loadData])
   );
 
-  const handleStartProgramWorkout = async () => {
-    if (!fullProgram || !nextWorkout) return;
+  const DELOAD_MULTIPLIER = 0.7;
+
+  const handleStartProgramWorkout = async (workoutId?: number) => {
+    if (!fullProgram) return;
+    const targetId = workoutId ?? selectedWorkoutId;
+    const targetWorkout = fullProgram.workouts.find((w) => w.id === targetId);
+    if (!targetWorkout) return;
 
     // Compute progression and warmup sets for each exercise
     const progressions = new Map<string, ProgressionResult>();
     const plannedSets: PlannedSet[] = [];
 
-    for (const exercise of nextWorkout.exercises) {
+    for (const exercise of targetWorkout.exercises) {
       const progression = await getProgressionForExercise(exercise);
       progressions.set(exercise.name, progression);
+
+      let workingWeight = progression.suggestedWeight;
+      if (deloadMode) {
+        const rawDeload = progression.suggestedWeight * DELOAD_MULTIPLIER;
+        const inc = exercise.warmup_min_increment ?? exercise.small_increment;
+        const minW = exercise.warmup_min_weight ?? 0;
+        workingWeight = Math.max(minW, Math.round(rawDeload / inc) * inc);
+      }
 
       let setNum = 1;
 
       // Generate warmup sets if configured
       if (exercise.warmup_sets != null && exercise.warmup_min_weight != null && exercise.warmup_min_increment != null) {
-        const warmups = generateWarmupSets(progression.suggestedWeight, {
+        const warmups = generateWarmupSets(workingWeight, {
           sets: exercise.warmup_sets,
           min_weight: exercise.warmup_min_weight,
           min_increment: exercise.warmup_min_increment,
@@ -112,7 +129,7 @@ export default function HomeScreen() {
           exerciseName: exercise.name,
           setNumber: setNum++,
           reps: exercise.target_reps,
-          weight: progression.suggestedWeight,
+          weight: workingWeight,
           weightUnit,
           groupTag: exercise.superset_group ?? undefined,
           restSeconds: exercise.rest_seconds,
@@ -123,12 +140,13 @@ export default function HomeScreen() {
 
     await startWorkout({
       programName: fullProgram.program.name,
-      day: nextWorkout.label,
+      day: targetWorkout.label,
       type: 'program',
-      programWorkoutId: nextWorkout.id,
+      programWorkoutId: targetWorkout.id,
       plannedSets,
-      programExercises: nextWorkout.exercises,
+      programExercises: targetWorkout.exercises,
       progressions,
+      isDeload: deloadMode,
     });
     navigation.navigate('ActiveWorkout');
   };
@@ -163,18 +181,60 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Program info and next workout */}
-      {fullProgram && nextWorkout && !workout && (
+      {/* Program info and workout picker */}
+      {fullProgram && fullProgram.workouts.length > 0 && !workout && (
         <View style={[styles.card, { backgroundColor: colors.card }]}>
           <Text style={[styles.programName, { color: colors.text }]}>{fullProgram.program.name}</Text>
-          <Text style={[styles.nextWorkout, { color: colors.secondaryText }]}>
-            Next: Workout {nextWorkout.label}
-          </Text>
+
+          {/* Workout selector */}
+          <View style={styles.workoutPicker}>
+            {fullProgram.workouts.map((pw) => {
+              const isSelected = pw.id === selectedWorkoutId;
+              const isNext = pw.id === nextWorkoutId;
+              return (
+                <TouchableOpacity
+                  key={pw.id}
+                  style={[
+                    styles.workoutChip,
+                    { borderColor: isSelected ? colors.accent : colors.border },
+                    isSelected && { backgroundColor: colors.accent },
+                  ]}
+                  onPress={() => setSelectedWorkoutId(pw.id)}
+                >
+                  <Text
+                    style={[
+                      styles.workoutChipText,
+                      { color: isSelected ? '#FFF' : colors.text },
+                    ]}
+                  >
+                    {pw.label}{isNext ? ' (next)' : ''}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Deload toggle */}
           <TouchableOpacity
-            style={[styles.startButton, { backgroundColor: colors.accent }]}
-            onPress={handleStartProgramWorkout}
+            style={[
+              styles.deloadToggle,
+              { borderColor: deloadMode ? '#FF9500' : colors.border },
+              deloadMode && { backgroundColor: '#FF9500' },
+            ]}
+            onPress={() => setDeloadMode(!deloadMode)}
           >
-            <Text style={styles.startButtonText}>Start Workout</Text>
+            <Text style={[styles.deloadToggleText, { color: deloadMode ? '#FFF' : colors.secondaryText }]}>
+              Deload{deloadMode ? ' (70% weight)' : ''}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.startButton, { backgroundColor: deloadMode ? '#FF9500' : colors.accent }]}
+            onPress={() => handleStartProgramWorkout()}
+          >
+            <Text style={styles.startButtonText}>
+              {deloadMode ? 'Start Deload Workout' : 'Start Workout'}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -214,7 +274,7 @@ export default function HomeScreen() {
                 </Text>
                 <Text style={[styles.workoutLabel, { color: colors.secondaryText }]}>
                   {item.type === 'program' && item.day
-                    ? `Workout ${item.day}`
+                    ? `Workout ${item.day}${item.is_deload ? ' (deload)' : ''}`
                     : 'Free Workout'}
                 </Text>
               </View>
@@ -269,6 +329,34 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 18,
     fontWeight: '700',
+  },
+  workoutPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  workoutChip: {
+    borderWidth: 2,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  workoutChipText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  deloadToggle: {
+    borderWidth: 2,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  deloadToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   freeButton: {
     borderRadius: 12,

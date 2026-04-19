@@ -16,6 +16,7 @@ import { WeightUnit, TimerAlertMode } from '../utils/constants';
 import * as programRepo from '../db/repositories/programRepository';
 import { ProgramRow } from '../db/types';
 import { parseProgramJSON } from '../utils/programParser';
+import { getSupabaseConfig, saveSupabaseConfig, syncAll, restoreFromCloud } from '../services/syncService';
 
 export default function SettingsScreen() {
   const colorScheme = useColorScheme();
@@ -25,10 +26,66 @@ export default function SettingsScreen() {
   const [restInput, setRestInput] = useState(String(defaultRestSeconds));
   const [activeProgram, setActiveProgram] = useState<ProgramRow | null>(null);
   const [allPrograms, setAllPrograms] = useState<ProgramRow[]>([]);
+  const [supabaseUrl, setSupabaseUrl] = useState('');
+  const [supabaseKey, setSupabaseKey] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     loadPrograms();
+    loadSupabaseConfig();
   }, []);
+
+  const loadSupabaseConfig = async () => {
+    const config = await getSupabaseConfig();
+    if (config) {
+      setSupabaseUrl(config.url);
+      setSupabaseKey(config.apiKey);
+    }
+  };
+
+  const handleSaveSupabase = async () => {
+    const trimmedUrl = supabaseUrl.replace(/\/+$/, '');
+    await saveSupabaseConfig(trimmedUrl, supabaseKey.trim());
+    setSupabaseUrl(trimmedUrl);
+    setSupabaseKey(supabaseKey.trim());
+    Alert.alert('Saved', 'Supabase configuration saved. Workouts will sync automatically.');
+  };
+
+  const handleSyncAll = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await syncAll();
+      Alert.alert('Sync Complete', `${result.synced} change(s) synced.`);
+    } catch (e: any) {
+      Alert.alert('Sync Failed', e.message || 'Unknown error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleRestore = () => {
+    Alert.alert(
+      'Restore from Cloud',
+      'This will pull all data from Supabase into your local database. Existing local data for the same workouts will be overwritten.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          onPress: async () => {
+            setIsSyncing(true);
+            try {
+              const result = await restoreFromCloud();
+              Alert.alert('Restore Complete', `${result.workouts} workout(s) restored.`);
+            } catch (e: any) {
+              Alert.alert('Restore Failed', e.message || 'Unknown error');
+            } finally {
+              setIsSyncing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const loadPrograms = async () => {
     const active = await programRepo.getActiveProgram();
@@ -204,6 +261,65 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Supabase Sync */}
+      <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>CLOUD SYNC</Text>
+      <View style={[styles.card, { backgroundColor: colors.card }]}>
+        <Text style={[styles.label, { color: colors.secondaryText, marginBottom: 12, fontSize: 13 }]}>
+          Workouts auto-sync to Supabase when completed.
+        </Text>
+        <Text style={[styles.label, { color: colors.text, marginBottom: 4, fontSize: 13 }]}>
+          Project URL
+        </Text>
+        <TextInput
+          style={[styles.supabaseInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+          value={supabaseUrl}
+          onChangeText={setSupabaseUrl}
+          placeholder="https://xxxxx.supabase.co"
+          placeholderTextColor={colors.secondaryText}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <Text style={[styles.label, { color: colors.text, marginBottom: 4, marginTop: 12, fontSize: 13 }]}>
+          API Key (anon/public)
+        </Text>
+        <TextInput
+          style={[styles.supabaseInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+          value={supabaseKey}
+          onChangeText={setSupabaseKey}
+          placeholder="eyJhbGciOiJIUz..."
+          placeholderTextColor={colors.secondaryText}
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry
+        />
+        <TouchableOpacity
+          style={[styles.syncButton, { backgroundColor: colors.accent, marginTop: 16 }]}
+          onPress={handleSaveSupabase}
+        >
+          <Text style={styles.syncButtonText}>Save Configuration</Text>
+        </TouchableOpacity>
+        {supabaseUrl.length > 0 && supabaseKey.length > 0 && (
+          <>
+            <TouchableOpacity
+              style={[styles.syncButton, { backgroundColor: isSyncing ? colors.secondaryText : '#34C759', marginTop: 8 }]}
+              onPress={handleSyncAll}
+              disabled={isSyncing}
+            >
+              <Text style={styles.syncButtonText}>
+                {isSyncing ? 'Syncing...' : 'Push Changes to Cloud'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.syncButton, { backgroundColor: isSyncing ? colors.secondaryText : colors.accent, marginTop: 8 }]}
+              onPress={handleRestore}
+              disabled={isSyncing}
+            >
+              <Text style={styles.syncButtonText}>Restore from Cloud</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+
       {/* Theme */}
       <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>THEME</Text>
       <View style={[styles.card, { backgroundColor: colors.card }]}>
@@ -268,5 +384,21 @@ const styles = StyleSheet.create({
   },
   linkButton: {
     marginTop: 12,
+  },
+  supabaseInput: {
+    fontSize: 14,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  syncButton: {
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center' as const,
+  },
+  syncButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600' as const,
   },
 });

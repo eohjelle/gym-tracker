@@ -115,4 +115,63 @@ export const migrations: Migration[] = [
       `ALTER TABLE workout_sets ADD COLUMN is_warmup INTEGER NOT NULL DEFAULT 0`,
     ],
   },
+  {
+    version: 4,
+    up: [
+      // Deload flag on workouts
+      `ALTER TABLE workouts ADD COLUMN is_deload INTEGER NOT NULL DEFAULT 0`,
+    ],
+  },
+  {
+    version: 5,
+    up: [
+      // Queue of local changes to sync to cloud
+      `CREATE TABLE IF NOT EXISTS sync_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        row_id INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      // Seed queue with all existing data so first sync pushes everything
+      `INSERT INTO sync_queue (table_name, operation, row_id)
+        SELECT 'workouts', 'INSERT', id FROM workouts WHERE status = 'completed'`,
+      `INSERT INTO sync_queue (table_name, operation, row_id)
+        SELECT 'workout_sets', 'INSERT', ws.id FROM workout_sets ws
+        JOIN workouts w ON w.id = ws.workout_id WHERE w.status = 'completed'`,
+      `INSERT INTO sync_queue (table_name, operation, row_id)
+        SELECT 'personal_records', 'INSERT', id FROM personal_records`,
+      // Triggers to auto-capture all writes on synced tables
+      // -- workouts
+      `CREATE TRIGGER sync_workouts_insert AFTER INSERT ON workouts BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id) VALUES ('workouts', 'INSERT', NEW.id);
+      END`,
+      `CREATE TRIGGER sync_workouts_update AFTER UPDATE ON workouts BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id) VALUES ('workouts', 'UPDATE', NEW.id);
+      END`,
+      `CREATE TRIGGER sync_workouts_delete AFTER DELETE ON workouts BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id) VALUES ('workouts', 'DELETE', OLD.id);
+      END`,
+      // -- workout_sets
+      `CREATE TRIGGER sync_sets_insert AFTER INSERT ON workout_sets BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id) VALUES ('workout_sets', 'INSERT', NEW.id);
+      END`,
+      `CREATE TRIGGER sync_sets_update AFTER UPDATE ON workout_sets BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id) VALUES ('workout_sets', 'UPDATE', NEW.id);
+      END`,
+      `CREATE TRIGGER sync_sets_delete AFTER DELETE ON workout_sets BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id) VALUES ('workout_sets', 'DELETE', OLD.id);
+      END`,
+      // -- personal_records
+      `CREATE TRIGGER sync_prs_insert AFTER INSERT ON personal_records BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id) VALUES ('personal_records', 'INSERT', NEW.id);
+      END`,
+      `CREATE TRIGGER sync_prs_update AFTER UPDATE ON personal_records BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id) VALUES ('personal_records', 'UPDATE', NEW.id);
+      END`,
+      `CREATE TRIGGER sync_prs_delete AFTER DELETE ON personal_records BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id) VALUES ('personal_records', 'DELETE', OLD.id);
+      END`,
+    ],
+  },
 ];

@@ -63,7 +63,7 @@ export default function HistoryScreen() {
                 </Text>
                 <Text style={[styles.label, { color: colors.secondaryText }]}>
                   {item.type === 'program' && item.day
-                    ? `${item.program_name} — Workout ${item.day}`
+                    ? `${item.program_name} — Workout ${item.day}${item.is_deload ? ' (deload)' : ''}`
                     : 'Free Workout'}
                 </Text>
               </View>
