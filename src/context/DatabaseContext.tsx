@@ -1,23 +1,17 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { SQLiteDatabase } from 'expo-sqlite';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { initDatabase } from '../db/database';
+import { WebDatabase, initDatabase } from '../db/database';
 
-const DatabaseContext = createContext<SQLiteDatabase | null>(null);
+const DatabaseContext = createContext<WebDatabase | null>(null);
 
 export function DatabaseProvider({ children }: { children: React.ReactNode }) {
-  const [db, setDb] = useState<SQLiteDatabase | null>(null);
+  const [db, setDb] = useState<WebDatabase | null>(null);
 
   useEffect(() => {
     initDatabase().then(setDb);
   }, []);
 
   if (!db) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
+    return <div className="loading">Loading...</div>;
   }
 
   return (
@@ -27,16 +21,8 @@ export function DatabaseProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useDB(): SQLiteDatabase {
+export function useDB(): WebDatabase {
   const db = useContext(DatabaseContext);
   if (!db) throw new Error('useDB must be used within DatabaseProvider');
   return db;
 }
-
-const styles = StyleSheet.create({
-  loading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});

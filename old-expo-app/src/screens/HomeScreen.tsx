@@ -1,0 +1,395 @@
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  useColorScheme,
+} from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../types/navigation';
+import { useActiveWorkout } from '../context/ActiveWorkoutContext';
+import { useSettings } from '../context/SettingsContext';
+import { WorkoutRow, ProgramExerciseRow } from '../db/types';
+import * as workoutRepo from '../db/repositories/workoutRepository';
+import * as programRepo from '../db/repositories/programRepository';
+import { FullProgram } from '../db/repositories/programRepository';
+import { formatDuration, formatDate } from '../utils/formatters';
+import { getNextWorkoutInCycle } from '../services/programService';
+import { getProgressionForExercise, ProgressionResult } from '../services/progressionService';
+import { generateWarmupSets } from '../services/warmupService';
+import { PlannedSet } from '../db/repositories/setRepository';
+
+type NavProp = NativeStackNavigationProp<RootStackParamList>;
+
+export default function HomeScreen() {
+  const navigation = useNavigation<NavProp>();
+  const { workout, startWorkout } = useActiveWorkout();
+  const { weightUnit } = useSettings();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const [recentWorkouts, setRecentWorkouts] = useState<
+    (WorkoutRow & { exerciseCount: number; setCount: number })[]
+  >([]);
+  const [fullProgram, setFullProgram] = useState<FullProgram | null>(null);
+  const [nextWorkoutId, setNextWorkoutId] = useState<number | null>(null);
+  const [selectedWorkoutId, setSelectedWorkoutId] = useState<number | null>(null);
+  const [deloadMode, setDeloadMode] = useState(false);
+
+  const loadData = useCallback(async () => {
+    const recent = await workoutRepo.getRecentWorkouts(7);
+    const withSummary = await Promise.all(
+      recent.map(async (w) => {
+        const summary = await workoutRepo.getWorkoutExerciseSummary(w.id);
+        return { ...w, ...summary };
+      })
+    );
+    setRecentWorkouts(withSummary);
+
+    const fp = await programRepo.getFullActiveProgram();
+    setFullProgram(fp);
+
+    if (fp) {
+      const lastProgramWorkout = await workoutRepo.getLastCompletedProgramWorkout();
+      const next = getNextWorkoutInCycle(
+        lastProgramWorkout?.program_workout_id ?? null,
+        fp.workouts
+      );
+      if (next) {
+        setNextWorkoutId(next.id);
+        setSelectedWorkoutId(next.id);
+      } else {
+        setNextWorkoutId(null);
+        setSelectedWorkoutId(fp.workouts[0]?.id ?? null);
+      }
+    } else {
+      setNextWorkoutId(null);
+      setSelectedWorkoutId(null);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const DELOAD_MULTIPLIER = 0.7;
+
+  const handleStartProgramWorkout = async (workoutId?: number) => {
+    if (!fullProgram) return;
+    const targetId = workoutId ?? selectedWorkoutId;
+    const targetWorkout = fullProgram.workouts.find((w) => w.id === targetId);
+    if (!targetWorkout) return;
+
+    // Compute progression and warmup sets for each exercise
+    const progressions = new Map<string, ProgressionResult>();
+    const plannedSets: PlannedSet[] = [];
+
+    for (const exercise of targetWorkout.exercises) {
+      const progression = await getProgressionForExercise(exercise);
+      progressions.set(exercise.name, progression);
+
+      let workingWeight = progression.suggestedWeight;
+      if (deloadMode) {
+        const rawDeload = progression.suggestedWeight * DELOAD_MULTIPLIER;
+        const inc = exercise.warmup_min_increment ?? exercise.small_increment;
+        const minW = exercise.warmup_min_weight ?? 0;
+        workingWeight = Math.max(minW, Math.round(rawDeload / inc) * inc);
+      }
+
+      let setNum = 1;
+
+      // Generate warmup sets if configured
+      if (exercise.warmup_sets != null && exercise.warmup_min_weight != null && exercise.warmup_min_increment != null) {
+        const warmups = generateWarmupSets(workingWeight, {
+          sets: exercise.warmup_sets,
+          min_weight: exercise.warmup_min_weight,
+          min_increment: exercise.warmup_min_increment,
+        });
+        for (const wu of warmups) {
+          plannedSets.push({
+            exerciseName: exercise.name,
+            setNumber: setNum++,
+            reps: wu.reps,
+            weight: wu.weight,
+            weightUnit,
+            restSeconds: 60, // shorter rest for warmups
+            isWarmup: true,
+          });
+        }
+      }
+
+      // Working sets
+      for (let s = 0; s < exercise.sets; s++) {
+        plannedSets.push({
+          exerciseName: exercise.name,
+          setNumber: setNum++,
+          reps: exercise.target_reps,
+          weight: workingWeight,
+          weightUnit,
+          groupTag: exercise.superset_group ?? undefined,
+          restSeconds: exercise.rest_seconds,
+          defaultRir: exercise.target_rir,
+        });
+      }
+    }
+
+    await startWorkout({
+      programName: fullProgram.program.name,
+      day: targetWorkout.label,
+      type: 'program',
+      programWorkoutId: targetWorkout.id,
+      plannedSets,
+      programExercises: targetWorkout.exercises,
+      progressions,
+      isDeload: deloadMode,
+    });
+    navigation.navigate('ActiveWorkout');
+  };
+
+  const handleStartFreeWorkout = async () => {
+    await startWorkout({ type: 'free' });
+    navigation.navigate('ActiveWorkout');
+  };
+
+  const handleResumeWorkout = () => {
+    navigation.navigate('ActiveWorkout');
+  };
+
+  const colors = {
+    bg: isDark ? '#000' : '#F2F2F7',
+    card: isDark ? '#1C1C1E' : '#FFF',
+    text: isDark ? '#FFF' : '#000',
+    secondaryText: isDark ? '#8E8E93' : '#6C6C70',
+    accent: '#007AFF',
+    border: isDark ? '#38383A' : '#E5E5EA',
+  };
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+      {/* Active workout banner */}
+      {workout && (
+        <TouchableOpacity
+          style={[styles.resumeBanner, { backgroundColor: '#34C759' }]}
+          onPress={handleResumeWorkout}
+        >
+          <Text style={styles.resumeText}>Workout in progress - tap to resume</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Program info and workout picker */}
+      {fullProgram && fullProgram.workouts.length > 0 && !workout && (
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
+          <Text style={[styles.programName, { color: colors.text }]}>{fullProgram.program.name}</Text>
+
+          {/* Workout selector */}
+          <View style={styles.workoutPicker}>
+            {fullProgram.workouts.map((pw) => {
+              const isSelected = pw.id === selectedWorkoutId;
+              const isNext = pw.id === nextWorkoutId;
+              return (
+                <TouchableOpacity
+                  key={pw.id}
+                  style={[
+                    styles.workoutChip,
+                    { borderColor: isSelected ? colors.accent : colors.border },
+                    isSelected && { backgroundColor: colors.accent },
+                  ]}
+                  onPress={() => setSelectedWorkoutId(pw.id)}
+                >
+                  <Text
+                    style={[
+                      styles.workoutChipText,
+                      { color: isSelected ? '#FFF' : colors.text },
+                    ]}
+                  >
+                    {pw.label}{isNext ? ' (next)' : ''}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Deload toggle */}
+          <TouchableOpacity
+            style={[
+              styles.deloadToggle,
+              { borderColor: deloadMode ? '#FF9500' : colors.border },
+              deloadMode && { backgroundColor: '#FF9500' },
+            ]}
+            onPress={() => setDeloadMode(!deloadMode)}
+          >
+            <Text style={[styles.deloadToggleText, { color: deloadMode ? '#FFF' : colors.secondaryText }]}>
+              Deload{deloadMode ? ' (70% weight)' : ''}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.startButton, { backgroundColor: deloadMode ? '#FF9500' : colors.accent }]}
+            onPress={() => handleStartProgramWorkout()}
+          >
+            <Text style={styles.startButtonText}>
+              {deloadMode ? 'Start Deload Workout' : 'Start Workout'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Free workout button */}
+      {!workout && (
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
+          <TouchableOpacity
+            style={[styles.freeButton, { borderColor: colors.accent }]}
+            onPress={handleStartFreeWorkout}
+          >
+            <Text style={[styles.freeButtonText, { color: colors.accent }]}>Free Workout</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Recent workouts */}
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Workouts</Text>
+      {recentWorkouts.length === 0 ? (
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
+          <Text style={[styles.emptyText, { color: colors.secondaryText }]}>
+            No workouts yet. Start your first workout!
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={recentWorkouts}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.workoutRow, { backgroundColor: colors.card, borderBottomColor: colors.border }]}
+              onPress={() => navigation.navigate('WorkoutDetail', { workoutId: item.id })}
+            >
+              <View style={styles.workoutRowLeft}>
+                <Text style={[styles.workoutDate, { color: colors.text }]}>
+                  {formatDate(item.start_time)}
+                </Text>
+                <Text style={[styles.workoutLabel, { color: colors.secondaryText }]}>
+                  {item.type === 'program' && item.day
+                    ? `Workout ${item.day}${item.is_deload ? ' (deload)' : ''}`
+                    : 'Free Workout'}
+                </Text>
+              </View>
+              <View style={styles.workoutRowRight}>
+                <Text style={[styles.workoutDuration, { color: colors.secondaryText }]}>
+                  {formatDuration(item.start_time, item.end_time)}
+                </Text>
+                <Text style={[styles.workoutStats, { color: colors.secondaryText }]}>
+                  {item.exerciseCount} exercises, {item.setCount} sets
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  resumeBanner: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  resumeText: {
+    color: '#FFF',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  card: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 12,
+    padding: 20,
+  },
+  programName: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  nextWorkout: {
+    fontSize: 15,
+    marginTop: 4,
+  },
+  startButton: {
+    marginTop: 16,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  startButtonText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  workoutPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  workoutChip: {
+    borderWidth: 2,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  workoutChipText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  deloadToggle: {
+    borderWidth: 2,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  deloadToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  freeButton: {
+    borderRadius: 12,
+    borderWidth: 2,
+    padding: 16,
+    alignItems: 'center',
+  },
+  freeButtonText: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginHorizontal: 16,
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 15,
+    textAlign: 'center',
+  },
+  workoutRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+    marginHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  workoutRowLeft: {},
+  workoutRowRight: { alignItems: 'flex-end' },
+  workoutDate: { fontSize: 17, fontWeight: '600' },
+  workoutLabel: { fontSize: 14, marginTop: 2 },
+  workoutDuration: { fontSize: 15 },
+  workoutStats: { fontSize: 13, marginTop: 2 },
+});

@@ -1,18 +1,8 @@
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  FlatList,
-  useColorScheme,
-} from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../types/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigation } from '../context/NavigationContext';
 import { useActiveWorkout } from '../context/ActiveWorkoutContext';
 import { useSettings } from '../context/SettingsContext';
-import { WorkoutRow, ProgramExerciseRow } from '../db/types';
+import { WorkoutRow } from '../db/types';
 import * as workoutRepo from '../db/repositories/workoutRepository';
 import * as programRepo from '../db/repositories/programRepository';
 import { FullProgram } from '../db/repositories/programRepository';
@@ -22,14 +12,10 @@ import { getProgressionForExercise, ProgressionResult } from '../services/progre
 import { generateWarmupSets } from '../services/warmupService';
 import { PlannedSet } from '../db/repositories/setRepository';
 
-type NavProp = NativeStackNavigationProp<RootStackParamList>;
-
 export default function HomeScreen() {
-  const navigation = useNavigation<NavProp>();
+  const { navigate } = useNavigation();
   const { workout, startWorkout } = useActiveWorkout();
   const { weightUnit } = useSettings();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
 
   const [recentWorkouts, setRecentWorkouts] = useState<
     (WorkoutRow & { exerciseCount: number; setCount: number })[]
@@ -71,11 +57,9 @@ export default function HomeScreen() {
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [loadData])
-  );
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const DELOAD_MULTIPLIER = 0.7;
 
@@ -85,7 +69,6 @@ export default function HomeScreen() {
     const targetWorkout = fullProgram.workouts.find((w) => w.id === targetId);
     if (!targetWorkout) return;
 
-    // Compute progression and warmup sets for each exercise
     const progressions = new Map<string, ProgressionResult>();
     const plannedSets: PlannedSet[] = [];
 
@@ -103,7 +86,6 @@ export default function HomeScreen() {
 
       let setNum = 1;
 
-      // Generate warmup sets if configured
       if (exercise.warmup_sets != null && exercise.warmup_min_weight != null && exercise.warmup_min_increment != null) {
         const warmups = generateWarmupSets(workingWeight, {
           sets: exercise.warmup_sets,
@@ -117,13 +99,12 @@ export default function HomeScreen() {
             reps: wu.reps,
             weight: wu.weight,
             weightUnit,
-            restSeconds: 60, // shorter rest for warmups
+            restSeconds: 60,
             isWarmup: true,
           });
         }
       }
 
-      // Working sets
       for (let s = 0; s < exercise.sets; s++) {
         plannedSets.push({
           exerciseName: exercise.name,
@@ -148,248 +129,180 @@ export default function HomeScreen() {
       progressions,
       isDeload: deloadMode,
     });
-    navigation.navigate('ActiveWorkout');
+    navigate({ screen: 'activeWorkout' });
   };
 
   const handleStartFreeWorkout = async () => {
     await startWorkout({ type: 'free' });
-    navigation.navigate('ActiveWorkout');
+    navigate({ screen: 'activeWorkout' });
   };
 
   const handleResumeWorkout = () => {
-    navigation.navigate('ActiveWorkout');
-  };
-
-  const colors = {
-    bg: isDark ? '#000' : '#F2F2F7',
-    card: isDark ? '#1C1C1E' : '#FFF',
-    text: isDark ? '#FFF' : '#000',
-    secondaryText: isDark ? '#8E8E93' : '#6C6C70',
-    accent: '#007AFF',
-    border: isDark ? '#38383A' : '#E5E5EA',
+    navigate({ screen: 'activeWorkout' });
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+    <div>
       {/* Active workout banner */}
       {workout && (
-        <TouchableOpacity
-          style={[styles.resumeBanner, { backgroundColor: '#34C759' }]}
-          onPress={handleResumeWorkout}
+        <button
+          onClick={handleResumeWorkout}
+          style={{
+            display: 'block',
+            width: '100%',
+            padding: 16,
+            background: 'var(--success)',
+            border: 'none',
+            color: '#FFF',
+            fontSize: 17,
+            fontWeight: 600,
+            textAlign: 'center',
+            cursor: 'pointer',
+          }}
         >
-          <Text style={styles.resumeText}>Workout in progress - tap to resume</Text>
-        </TouchableOpacity>
+          Workout in progress - tap to resume
+        </button>
       )}
 
       {/* Program info and workout picker */}
       {fullProgram && fullProgram.workouts.length > 0 && !workout && (
-        <View style={[styles.card, { backgroundColor: colors.card }]}>
-          <Text style={[styles.programName, { color: colors.text }]}>{fullProgram.program.name}</Text>
+        <div className="card">
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)' }}>
+            {fullProgram.program.name}
+          </div>
 
           {/* Workout selector */}
-          <View style={styles.workoutPicker}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
             {fullProgram.workouts.map((pw) => {
               const isSelected = pw.id === selectedWorkoutId;
               const isNext = pw.id === nextWorkoutId;
               return (
-                <TouchableOpacity
+                <button
                   key={pw.id}
-                  style={[
-                    styles.workoutChip,
-                    { borderColor: isSelected ? colors.accent : colors.border },
-                    isSelected && { backgroundColor: colors.accent },
-                  ]}
-                  onPress={() => setSelectedWorkoutId(pw.id)}
+                  onClick={() => setSelectedWorkoutId(pw.id)}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    border: `2px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
+                    background: isSelected ? 'var(--accent)' : 'none',
+                    color: isSelected ? '#FFF' : 'var(--text)',
+                    fontSize: 15,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
                 >
-                  <Text
-                    style={[
-                      styles.workoutChipText,
-                      { color: isSelected ? '#FFF' : colors.text },
-                    ]}
-                  >
-                    {pw.label}{isNext ? ' (next)' : ''}
-                  </Text>
-                </TouchableOpacity>
+                  {pw.label}
+                  {isNext ? ' (next)' : ''}
+                </button>
               );
             })}
-          </View>
+          </div>
 
           {/* Deload toggle */}
-          <TouchableOpacity
-            style={[
-              styles.deloadToggle,
-              { borderColor: deloadMode ? '#FF9500' : colors.border },
-              deloadMode && { backgroundColor: '#FF9500' },
-            ]}
-            onPress={() => setDeloadMode(!deloadMode)}
+          <button
+            onClick={() => setDeloadMode(!deloadMode)}
+            style={{
+              display: 'block',
+              width: '100%',
+              marginTop: 12,
+              padding: '8px 14px',
+              borderRadius: 8,
+              border: `2px solid ${deloadMode ? '#FF9500' : 'var(--border)'}`,
+              background: deloadMode ? '#FF9500' : 'none',
+              color: deloadMode ? '#FFF' : 'var(--text-secondary)',
+              fontSize: 14,
+              fontWeight: 600,
+              textAlign: 'center',
+              cursor: 'pointer',
+            }}
           >
-            <Text style={[styles.deloadToggleText, { color: deloadMode ? '#FFF' : colors.secondaryText }]}>
-              Deload{deloadMode ? ' (70% weight)' : ''}
-            </Text>
-          </TouchableOpacity>
+            Deload{deloadMode ? ' (70% weight)' : ''}
+          </button>
 
-          <TouchableOpacity
-            style={[styles.startButton, { backgroundColor: deloadMode ? '#FF9500' : colors.accent }]}
-            onPress={() => handleStartProgramWorkout()}
+          <button
+            className="btn btn-accent"
+            onClick={() => handleStartProgramWorkout()}
+            style={{
+              marginTop: 16,
+              background: deloadMode ? '#FF9500' : undefined,
+            }}
           >
-            <Text style={styles.startButtonText}>
-              {deloadMode ? 'Start Deload Workout' : 'Start Workout'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+            {deloadMode ? 'Start Deload Workout' : 'Start Workout'}
+          </button>
+        </div>
       )}
 
       {/* Free workout button */}
       {!workout && (
-        <View style={[styles.card, { backgroundColor: colors.card }]}>
-          <TouchableOpacity
-            style={[styles.freeButton, { borderColor: colors.accent }]}
-            onPress={handleStartFreeWorkout}
+        <div className="card">
+          <button
+            onClick={handleStartFreeWorkout}
+            style={{
+              display: 'block',
+              width: '100%',
+              padding: 16,
+              borderRadius: 12,
+              border: '2px solid var(--accent)',
+              background: 'none',
+              color: 'var(--accent)',
+              fontSize: 18,
+              fontWeight: 700,
+              textAlign: 'center',
+              cursor: 'pointer',
+            }}
           >
-            <Text style={[styles.freeButtonText, { color: colors.accent }]}>Free Workout</Text>
-          </TouchableOpacity>
-        </View>
+            Free Workout
+          </button>
+        </div>
       )}
 
       {/* Recent workouts */}
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Workouts</Text>
+      <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', margin: '24px 16px 8px' }}>
+        Recent Workouts
+      </div>
       {recentWorkouts.length === 0 ? (
-        <View style={[styles.card, { backgroundColor: colors.card }]}>
-          <Text style={[styles.emptyText, { color: colors.secondaryText }]}>
+        <div className="card">
+          <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 15 }}>
             No workouts yet. Start your first workout!
-          </Text>
-        </View>
+          </div>
+        </div>
       ) : (
-        <FlatList
-          data={recentWorkouts}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.workoutRow, { backgroundColor: colors.card, borderBottomColor: colors.border }]}
-              onPress={() => navigation.navigate('WorkoutDetail', { workoutId: item.id })}
-            >
-              <View style={styles.workoutRowLeft}>
-                <Text style={[styles.workoutDate, { color: colors.text }]}>
-                  {formatDate(item.start_time)}
-                </Text>
-                <Text style={[styles.workoutLabel, { color: colors.secondaryText }]}>
-                  {item.type === 'program' && item.day
-                    ? `Workout ${item.day}${item.is_deload ? ' (deload)' : ''}`
-                    : 'Free Workout'}
-                </Text>
-              </View>
-              <View style={styles.workoutRowRight}>
-                <Text style={[styles.workoutDuration, { color: colors.secondaryText }]}>
-                  {formatDuration(item.start_time, item.end_time)}
-                </Text>
-                <Text style={[styles.workoutStats, { color: colors.secondaryText }]}>
-                  {item.exerciseCount} exercises, {item.setCount} sets
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        />
+        recentWorkouts.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => navigate({ screen: 'workoutDetail', workoutId: item.id })}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              width: '100%',
+              padding: 16,
+              background: 'var(--card)',
+              border: 'none',
+              borderBottom: '0.5px solid var(--border)',
+              textAlign: 'left',
+              cursor: 'pointer',
+              color: 'var(--text)',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 600 }}>{formatDate(item.start_time)}</div>
+              <div style={{ fontSize: 14, marginTop: 2, color: 'var(--text-secondary)' }}>
+                {item.type === 'program' && item.day
+                  ? `Workout ${item.day}${item.is_deload ? ' (deload)' : ''}`
+                  : 'Free Workout'}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 15, color: 'var(--text-secondary)' }}>
+                {formatDuration(item.start_time, item.end_time)}
+              </div>
+              <div style={{ fontSize: 13, marginTop: 2, color: 'var(--text-secondary)' }}>
+                {item.exerciseCount} exercises, {item.setCount} sets
+              </div>
+            </div>
+          </button>
+        ))
       )}
-    </View>
+    </div>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  resumeBanner: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  resumeText: {
-    color: '#FFF',
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  card: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 12,
-    padding: 20,
-  },
-  programName: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  nextWorkout: {
-    fontSize: 15,
-    marginTop: 4,
-  },
-  startButton: {
-    marginTop: 16,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  startButtonText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  workoutPicker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-  },
-  workoutChip: {
-    borderWidth: 2,
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-  },
-  workoutChipText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  deloadToggle: {
-    borderWidth: 2,
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    marginTop: 12,
-    alignItems: 'center',
-  },
-  deloadToggleText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  freeButton: {
-    borderRadius: 12,
-    borderWidth: 2,
-    padding: 16,
-    alignItems: 'center',
-  },
-  freeButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginHorizontal: 16,
-    marginTop: 24,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 15,
-    textAlign: 'center',
-  },
-  workoutRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-    marginHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  workoutRowLeft: {},
-  workoutRowRight: { alignItems: 'flex-end' },
-  workoutDate: { fontSize: 17, fontWeight: '600' },
-  workoutLabel: { fontSize: 14, marginTop: 2 },
-  workoutDuration: { fontSize: 15 },
-  workoutStats: { fontSize: 13, marginTop: 2 },
-});

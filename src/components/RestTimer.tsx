@@ -1,6 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, useColorScheme } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { useEffect, useRef, useState } from 'react';
 import { formatTimerSeconds } from '../utils/formatters';
 import { useSettings } from '../context/SettingsContext';
 
@@ -10,11 +8,26 @@ interface Props {
   onSkip: () => void;
 }
 
+let audioCtx: AudioContext | null = null;
+
+function playBeep() {
+  try {
+    if (!audioCtx) audioCtx = new AudioContext();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = 880;
+    gain.gain.value = 0.3;
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.15);
+  } catch {
+    // Audio not available
+  }
+}
+
 export default function RestTimer({ initialSeconds, onComplete, onSkip }: Props) {
   const { timerAlertMode } = useSettings();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-
   const [remainingSeconds, setRemainingSeconds] = useState(initialSeconds);
   const [isPaused, setIsPaused] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
@@ -31,8 +44,7 @@ export default function RestTimer({ initialSeconds, onComplete, onSkip }: Props)
   function startInterval() {
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = setInterval(() => {
-      const now = Date.now();
-      const remaining = Math.max(0, Math.ceil((endTimeRef.current - now) / 1000));
+      const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
       setRemainingSeconds(remaining);
 
       if (remaining <= 0) {
@@ -45,19 +57,20 @@ export default function RestTimer({ initialSeconds, onComplete, onSkip }: Props)
   }
 
   function triggerAlert() {
+    if (timerAlertMode === 'sound_vibration') {
+      playBeep();
+    }
     if (timerAlertMode === 'sound_vibration' || timerAlertMode === 'vibration') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (navigator.vibrate) navigator.vibrate(300);
     }
   }
 
   function handlePause() {
     if (isPaused) {
-      // Resume: recalculate end time
       endTimeRef.current = Date.now() + remainingSeconds * 1000;
       setIsPaused(false);
       startInterval();
     } else {
-      // Pause
       if (intervalRef.current) clearInterval(intervalRef.current);
       setIsPaused(true);
     }
@@ -66,87 +79,86 @@ export default function RestTimer({ initialSeconds, onComplete, onSkip }: Props)
   function handleExtend() {
     endTimeRef.current += 30 * 1000;
     setRemainingSeconds((prev) => prev + 30);
-    if (isPaused) {
-      // Stay paused but update remaining
-    }
   }
 
-  const colors = {
-    bg: '#000',
-    text: '#FFF',
-    accent: '#007AFF',
-    secondaryText: '#8E8E93',
-  };
-
-  const progress = 1 - remainingSeconds / (initialSeconds || 1);
-
   return (
-    <View style={[styles.overlay, { backgroundColor: colors.bg }]}>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: '#000',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 100,
+      }}
+    >
       {isFinished ? (
-        <Text style={styles.finishedText}>Time's up!</Text>
+        <div style={{ color: 'var(--success)', fontSize: 36, fontWeight: 800 }}>Time's up!</div>
       ) : (
         <>
-          <Text style={styles.label}>Rest</Text>
-          <Text style={styles.timer}>{formatTimerSeconds(remainingSeconds)}</Text>
+          <div style={{ color: '#8E8E93', fontSize: 20, fontWeight: 600, marginBottom: 8 }}>Rest</div>
+          <div
+            style={{
+              color: '#FFF',
+              fontSize: 80,
+              fontWeight: 800,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {formatTimerSeconds(remainingSeconds)}
+          </div>
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.actionButton} onPress={handlePause}>
-              <Text style={[styles.actionText, { color: colors.accent }]}>
-                {isPaused ? 'Resume' : 'Pause'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.actionButton} onPress={handleExtend}>
-              <Text style={[styles.actionText, { color: colors.accent }]}>+30s</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.actionButton} onPress={onSkip}>
-              <Text style={[styles.actionText, { color: colors.secondaryText }]}>Skip</Text>
-            </TouchableOpacity>
-          </View>
+          <div style={{ display: 'flex', gap: 24, marginTop: 40 }}>
+            <button
+              onClick={handlePause}
+              style={{
+                padding: '14px 20px',
+                borderRadius: 12,
+                background: 'rgba(255,255,255,0.1)',
+                border: 'none',
+                color: 'var(--accent)',
+                fontSize: 18,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              {isPaused ? 'Resume' : 'Pause'}
+            </button>
+            <button
+              onClick={handleExtend}
+              style={{
+                padding: '14px 20px',
+                borderRadius: 12,
+                background: 'rgba(255,255,255,0.1)',
+                border: 'none',
+                color: 'var(--accent)',
+                fontSize: 18,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              +30s
+            </button>
+            <button
+              onClick={onSkip}
+              style={{
+                padding: '14px 20px',
+                borderRadius: 12,
+                background: 'rgba(255,255,255,0.1)',
+                border: 'none',
+                color: '#8E8E93',
+                fontSize: 18,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              Skip
+            </button>
+          </div>
         </>
       )}
-    </View>
+    </div>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 100,
-  },
-  label: {
-    color: '#8E8E93',
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  timer: {
-    color: '#FFF',
-    fontSize: 80,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-  },
-  finishedText: {
-    color: '#34C759',
-    fontSize: 36,
-    fontWeight: '800',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    marginTop: 40,
-    gap: 24,
-  },
-  actionButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  actionText: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-});

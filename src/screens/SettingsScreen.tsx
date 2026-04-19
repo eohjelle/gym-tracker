@@ -1,16 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  ScrollView,
-  useColorScheme,
-} from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { WeightUnit, TimerAlertMode } from '../utils/constants';
 import * as programRepo from '../db/repositories/programRepository';
@@ -18,9 +6,27 @@ import { ProgramRow } from '../db/types';
 import { parseProgramJSON } from '../utils/programParser';
 import { getSupabaseConfig, saveSupabaseConfig, syncAll, restoreFromCloud } from '../services/syncService';
 
+function SegmentedControl({ options, selected, onSelect }: {
+  options: { key: string; label: string }[];
+  selected: string;
+  onSelect: (key: string) => void;
+}) {
+  return (
+    <div className="segmented">
+      {options.map((opt) => (
+        <button
+          key={opt.key}
+          className={selected === opt.key ? 'active' : ''}
+          onClick={() => onSelect(opt.key)}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function SettingsScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
   const { weightUnit, defaultRestSeconds, timerAlertMode, updateSetting } = useSettings();
 
   const [restInput, setRestInput] = useState(String(defaultRestSeconds));
@@ -29,11 +35,16 @@ export default function SettingsScreen() {
   const [supabaseUrl, setSupabaseUrl] = useState('');
   const [supabaseKey, setSupabaseKey] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadPrograms();
     loadSupabaseConfig();
   }, []);
+
+  useEffect(() => {
+    setRestInput(String(defaultRestSeconds));
+  }, [defaultRestSeconds]);
 
   const loadSupabaseConfig = async () => {
     const config = await getSupabaseConfig();
@@ -48,43 +59,28 @@ export default function SettingsScreen() {
     await saveSupabaseConfig(trimmedUrl, supabaseKey.trim());
     setSupabaseUrl(trimmedUrl);
     setSupabaseKey(supabaseKey.trim());
-    Alert.alert('Saved', 'Supabase configuration saved. Workouts will sync automatically.');
+    alert('Supabase configuration saved. Workouts will sync automatically.');
   };
 
   const handleSyncAll = async () => {
     setIsSyncing(true);
     try {
       const result = await syncAll();
-      Alert.alert('Sync Complete', `${result.synced} change(s) synced.`);
+      alert(`Sync complete: ${result.synced} change(s) synced.`);
     } catch (e: any) {
-      Alert.alert('Sync Failed', e.message || 'Unknown error');
+      alert(`Sync failed: ${e.message || 'Unknown error'}`);
     } finally {
       setIsSyncing(false);
     }
   };
 
   const handleRestore = () => {
-    Alert.alert(
-      'Restore from Cloud',
-      'This will pull all data from Supabase into your local database. Existing local data for the same workouts will be overwritten.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Restore',
-          onPress: async () => {
-            setIsSyncing(true);
-            try {
-              const result = await restoreFromCloud();
-              Alert.alert('Restore Complete', `${result.workouts} workout(s) restored.`);
-            } catch (e: any) {
-              Alert.alert('Restore Failed', e.message || 'Unknown error');
-            } finally {
-              setIsSyncing(false);
-            }
-          },
-        },
-      ]
-    );
+    if (!window.confirm('This will pull all data from Supabase into your local database. Existing local data for the same workouts will be overwritten. Continue?')) return;
+    setIsSyncing(true);
+    restoreFromCloud()
+      .then((result) => alert(`Restore complete: ${result.workouts} workout(s) restored.`))
+      .catch((e: any) => alert(`Restore failed: ${e.message || 'Unknown error'}`))
+      .finally(() => setIsSyncing(false));
   };
 
   const loadPrograms = async () => {
@@ -93,10 +89,6 @@ export default function SettingsScreen() {
     const all = await programRepo.getAllPrograms();
     setAllPrograms(all);
   };
-
-  useEffect(() => {
-    setRestInput(String(defaultRestSeconds));
-  }, [defaultRestSeconds]);
 
   const handleRestChange = async () => {
     const val = parseInt(restInput, 10);
@@ -107,108 +99,49 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleImportProgram = async () => {
+  const handleImportProgram = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'text/*',
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled) return;
-
-      const file = result.assets[0];
-      const content = await FileSystem.readAsStringAsync(file.uri);
-
-      // Validate JSON
+      const content = await file.text();
       const parsed = parseProgramJSON(content);
-
       await programRepo.saveProgram(parsed);
       await loadPrograms();
-      Alert.alert('Program Imported', `"${parsed.name}" loaded with ${parsed.workouts.length} workouts.`);
-    } catch (e: any) {
-      Alert.alert('Import Error', e.message || 'Failed to import program.');
+      alert(`"${parsed.name}" loaded with ${parsed.workouts.length} workouts.`);
+    } catch (err: any) {
+      alert(`Import error: ${err.message || 'Failed to import program.'}`);
     }
+    // Reset file input so same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleRemoveProgram = async () => {
     if (!activeProgram) return;
-    Alert.alert('Remove Program', `Remove "${activeProgram.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          await programRepo.deleteProgram(activeProgram.id);
-          await loadPrograms();
-        },
-      },
-    ]);
+    if (!window.confirm(`Remove "${activeProgram.name}"?`)) return;
+    await programRepo.deleteProgram(activeProgram.id);
+    await loadPrograms();
   };
-
-  const colors = {
-    bg: isDark ? '#000' : '#F2F2F7',
-    card: isDark ? '#1C1C1E' : '#FFF',
-    text: isDark ? '#FFF' : '#000',
-    secondaryText: isDark ? '#8E8E93' : '#6C6C70',
-    accent: '#007AFF',
-    border: isDark ? '#38383A' : '#E5E5EA',
-    destructive: '#FF3B30',
-    inputBg: isDark ? '#2C2C2E' : '#F2F2F7',
-  };
-
-  const SegmentedControl = ({
-    options,
-    selected,
-    onSelect,
-  }: {
-    options: { key: string; label: string }[];
-    selected: string;
-    onSelect: (key: string) => void;
-  }) => (
-    <View style={[styles.segmented, { backgroundColor: colors.inputBg }]}>
-      {options.map((opt) => (
-        <TouchableOpacity
-          key={opt.key}
-          style={[
-            styles.segment,
-            selected === opt.key && { backgroundColor: colors.accent },
-          ]}
-          onPress={() => onSelect(opt.key)}
-        >
-          <Text
-            style={[
-              styles.segmentText,
-              { color: selected === opt.key ? '#FFF' : colors.text },
-            ]}
-          >
-            {opt.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.bg }]}>
+    <div style={{ paddingBottom: 40 }}>
       {/* Rest Timer */}
-      <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>REST TIMER</Text>
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
-        <View style={styles.row}>
-          <Text style={[styles.label, { color: colors.text }]}>Default duration (seconds)</Text>
-          <TextInput
-            style={[styles.input, { color: colors.text, backgroundColor: colors.inputBg }]}
+      <div className="section-title">REST TIMER</div>
+      <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Default duration (seconds)</span>
+          <input
+            type="number"
             value={restInput}
-            onChangeText={setRestInput}
+            onChange={(e) => setRestInput(e.target.value)}
             onBlur={handleRestChange}
-            keyboardType="number-pad"
-            returnKeyType="done"
+            style={{ width: 80, textAlign: 'center', fontWeight: 600 }}
           />
-        </View>
-      </View>
+        </div>
+      </div>
 
       {/* Weight Unit */}
-      <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>WEIGHT UNIT</Text>
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
+      <div className="section-title">WEIGHT UNIT</div>
+      <div className="card">
         <SegmentedControl
           options={[
             { key: 'kg', label: 'Kilograms (kg)' },
@@ -217,11 +150,11 @@ export default function SettingsScreen() {
           selected={weightUnit}
           onSelect={(key) => updateSetting('weightUnit', key as WeightUnit)}
         />
-      </View>
+      </div>
 
       {/* Timer Alert */}
-      <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>TIMER ALERT</Text>
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
+      <div className="section-title">TIMER ALERT</div>
+      <div className="card">
         <SegmentedControl
           options={[
             { key: 'sound_vibration', label: 'Sound + Vibration' },
@@ -231,174 +164,117 @@ export default function SettingsScreen() {
           selected={timerAlertMode}
           onSelect={(key) => updateSetting('timerAlertMode', key as TimerAlertMode)}
         />
-      </View>
+      </div>
 
       {/* Program */}
-      <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>PROGRAM</Text>
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
+      <div className="section-title">PROGRAM</div>
+      <div className="card">
         {allPrograms.map((p) => (
-          <TouchableOpacity
+          <button
             key={p.id}
-            style={[styles.programRow, { borderBottomColor: colors.border }]}
-            onPress={async () => {
+            onClick={async () => {
               await programRepo.setActiveProgram(p.id);
               await loadPrograms();
             }}
+            style={{
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              background: 'none',
+              border: 'none',
+              borderBottom: '0.5px solid var(--border)',
+              padding: '10px 0',
+              fontSize: 16,
+              color: 'var(--text)',
+            }}
           >
-            <Text style={[styles.label, { color: colors.text }]}>
-              {p.id === activeProgram?.id ? '● ' : '○ '}
-              {p.name}
-            </Text>
-          </TouchableOpacity>
+            {p.id === activeProgram?.id ? '● ' : '○ '}
+            {p.name}
+          </button>
         ))}
         {activeProgram && (
-          <TouchableOpacity style={styles.linkButton} onPress={handleRemoveProgram}>
-            <Text style={{ color: colors.destructive, fontSize: 16 }}>Remove Active Program</Text>
-          </TouchableOpacity>
+          <button
+            onClick={handleRemoveProgram}
+            style={{ background: 'none', border: 'none', color: 'var(--destructive)', fontSize: 16, marginTop: 12, padding: 0 }}
+          >
+            Remove Active Program
+          </button>
         )}
-        <TouchableOpacity style={styles.linkButton} onPress={handleImportProgram}>
-          <Text style={{ color: colors.accent, fontSize: 16 }}>Import Program JSON</Text>
-        </TouchableOpacity>
-      </View>
+        <div style={{ marginTop: 12 }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImportProgram}
+            style={{ display: 'none' }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 16, padding: 0 }}
+          >
+            Import Program JSON
+          </button>
+        </div>
+      </div>
 
-      {/* Supabase Sync */}
-      <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>CLOUD SYNC</Text>
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
-        <Text style={[styles.label, { color: colors.secondaryText, marginBottom: 12, fontSize: 13 }]}>
+      {/* Cloud Sync */}
+      <div className="section-title">CLOUD SYNC</div>
+      <div className="card">
+        <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
           Workouts auto-sync to Supabase when completed.
-        </Text>
-        <Text style={[styles.label, { color: colors.text, marginBottom: 4, fontSize: 13 }]}>
-          Project URL
-        </Text>
-        <TextInput
-          style={[styles.supabaseInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+        </p>
+        <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>Project URL</label>
+        <input
+          type="url"
           value={supabaseUrl}
-          onChangeText={setSupabaseUrl}
+          onChange={(e) => setSupabaseUrl(e.target.value)}
           placeholder="https://xxxxx.supabase.co"
-          placeholderTextColor={colors.secondaryText}
-          autoCapitalize="none"
-          autoCorrect={false}
+          style={{ fontSize: 14 }}
         />
-        <Text style={[styles.label, { color: colors.text, marginBottom: 4, marginTop: 12, fontSize: 13 }]}>
-          API Key (anon/public)
-        </Text>
-        <TextInput
-          style={[styles.supabaseInput, { color: colors.text, backgroundColor: colors.inputBg }]}
+        <label style={{ fontSize: 13, display: 'block', marginBottom: 4, marginTop: 12 }}>API Key (anon/public)</label>
+        <input
+          type="password"
           value={supabaseKey}
-          onChangeText={setSupabaseKey}
+          onChange={(e) => setSupabaseKey(e.target.value)}
           placeholder="eyJhbGciOiJIUz..."
-          placeholderTextColor={colors.secondaryText}
-          autoCapitalize="none"
-          autoCorrect={false}
-          secureTextEntry
+          style={{ fontSize: 14 }}
         />
-        <TouchableOpacity
-          style={[styles.syncButton, { backgroundColor: colors.accent, marginTop: 16 }]}
-          onPress={handleSaveSupabase}
+        <button
+          className="btn btn-accent"
+          onClick={handleSaveSupabase}
+          style={{ marginTop: 16, borderRadius: 8, padding: 12 }}
         >
-          <Text style={styles.syncButtonText}>Save Configuration</Text>
-        </TouchableOpacity>
+          Save Configuration
+        </button>
         {supabaseUrl.length > 0 && supabaseKey.length > 0 && (
           <>
-            <TouchableOpacity
-              style={[styles.syncButton, { backgroundColor: isSyncing ? colors.secondaryText : '#34C759', marginTop: 8 }]}
-              onPress={handleSyncAll}
+            <button
+              className="btn btn-success"
+              onClick={handleSyncAll}
               disabled={isSyncing}
+              style={{ marginTop: 8, borderRadius: 8, padding: 12, opacity: isSyncing ? 0.6 : 1 }}
             >
-              <Text style={styles.syncButtonText}>
-                {isSyncing ? 'Syncing...' : 'Push Changes to Cloud'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.syncButton, { backgroundColor: isSyncing ? colors.secondaryText : colors.accent, marginTop: 8 }]}
-              onPress={handleRestore}
+              {isSyncing ? 'Syncing...' : 'Push Changes to Cloud'}
+            </button>
+            <button
+              className="btn btn-accent"
+              onClick={handleRestore}
               disabled={isSyncing}
+              style={{ marginTop: 8, borderRadius: 8, padding: 12, opacity: isSyncing ? 0.6 : 1 }}
             >
-              <Text style={styles.syncButtonText}>Restore from Cloud</Text>
-            </TouchableOpacity>
+              Restore from Cloud
+            </button>
           </>
         )}
-      </View>
+      </div>
 
       {/* Theme */}
-      <Text style={[styles.sectionTitle, { color: colors.secondaryText }]}>THEME</Text>
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
-        <Text style={[styles.label, { color: colors.secondaryText }]}>
-          Follows system setting (currently {isDark ? 'dark' : 'light'})
-        </Text>
-      </View>
-
-      <View style={{ height: 40 }} />
-    </ScrollView>
+      <div className="section-title">THEME</div>
+      <div className="card">
+        <span style={{ color: 'var(--text-secondary)' }}>
+          Follows system setting
+        </span>
+      </div>
+    </div>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginHorizontal: 16,
-    marginTop: 24,
-    marginBottom: 8,
-    letterSpacing: 0.5,
-  },
-  card: {
-    marginHorizontal: 16,
-    borderRadius: 12,
-    padding: 16,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  label: { fontSize: 16 },
-  input: {
-    fontSize: 16,
-    fontWeight: '600',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minWidth: 80,
-    textAlign: 'center',
-  },
-  segmented: {
-    flexDirection: 'row',
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  segment: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  segmentText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  programRow: {
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  linkButton: {
-    marginTop: 12,
-  },
-  supabaseInput: {
-    fontSize: 14,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  syncButton: {
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center' as const,
-  },
-  syncButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600' as const,
-  },
-});

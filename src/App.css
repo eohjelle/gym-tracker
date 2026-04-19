@@ -1,0 +1,223 @@
+/* Reset */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Design tokens */
+:root {
+  --bg: #F2F2F7;
+  --card: #FFF;
+  --text: #000;
+  --text-secondary: #6C6C70;
+  --accent: #007AFF;
+  --border: #E5E5EA;
+  --input-bg: #E5E5EA;
+  --destructive: #FF3B30;
+  --success: #34C759;
+  --warning: #FF9500;
+  --gold: #FFD60A;
+  --warmup-text: #AEAEB2;
+
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000;
+    --card: #1C1C1E;
+    --text: #FFF;
+    --text-secondary: #8E8E93;
+    --border: #38383A;
+    --input-bg: #2C2C2E;
+    --warmup-text: #636366;
+  }
+}
+
+html, body, #root {
+  height: 100dvh;
+  overflow: hidden;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* App shell */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.screen-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: var(--safe-top);
+}
+
+/* Tab bar */
+.tab-bar {
+  display: flex;
+  border-top: 0.5px solid var(--border);
+  background: var(--card);
+  padding-bottom: var(--safe-bottom);
+}
+
+.tab-bar button {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 8px 0 6px;
+  font-family: var(--font);
+  font-size: 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.tab-bar button.active {
+  color: var(--accent);
+}
+
+.tab-bar button .tab-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* Loading screen */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100dvh;
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+/* Common card style */
+.card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 0 16px 12px;
+}
+
+/* Common section title */
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 24px 16px 8px;
+  letter-spacing: 0.5px;
+}
+
+/* Buttons */
+button {
+  font-family: var(--font);
+  cursor: pointer;
+  -webkit-appearance: none;
+}
+
+.btn {
+  border: none;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 17px;
+  font-weight: 600;
+  width: 100%;
+  text-align: center;
+  cursor: pointer;
+}
+
+.btn-accent {
+  background: var(--accent);
+  color: #FFF;
+}
+
+.btn-success {
+  background: var(--success);
+  color: #FFF;
+}
+
+.btn-destructive {
+  background: none;
+  color: var(--destructive);
+}
+
+/* Inputs */
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="url"] {
+  font-family: var(--font);
+  font-size: 16px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  width: 100%;
+  outline: none;
+}
+
+input::placeholder {
+  color: var(--text-secondary);
+}
+
+/* Segmented control */
+.segmented {
+  display: flex;
+  background: var(--input-bg);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.segmented button {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  border-radius: 8px;
+}
+
+.segmented button.active {
+  background: var(--accent);
+  color: #FFF;
+}
+
+/* Modal overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.modal-content {
+  background: var(--bg);
+  border-radius: 16px 16px 0 0;
+  width: 100%;
+  max-height: 80dvh;
+  padding-bottom: var(--safe-bottom);
+  overflow-y: auto;
+}
+
+/* Hairline separator */
+.separator {
+  border-top: 0.5px solid var(--border);
+}

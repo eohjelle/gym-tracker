@@ -1,69 +1,57 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Dimensions,
-  useColorScheme,
-} from 'react-native';
-import Svg, { Polyline, Circle, Line, Text as SvgText } from 'react-native-svg';
+import { useState, useEffect, useRef } from 'react';
 import { getDatabase } from '../db/database';
 import * as setRepo from '../db/repositories/setRepository';
 import { estimatedOneRepMax } from '../utils/formulas';
-import { formatWeight } from '../utils/formatters';
-import { useSettings } from '../context/SettingsContext';
 
 type ChartType = 'weight' | 'volume' | 'estimated_1rm';
 type TimeRange = '4w' | '12w' | '6m' | 'all';
 
 interface DataPoint {
-  date: Date;
+  date: string;
   value: number;
 }
 
-const CHART_HEIGHT = 200;
-const CHART_PADDING = 40;
-
 export default function GraphsScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const { weightUnit } = useSettings();
-
   const [exerciseNames, setExerciseNames] = useState<string[]>([]);
-  const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+  const [selectedExercise, setSelectedExercise] = useState<string>('');
   const [chartType, setChartType] = useState<ChartType>('weight');
   const [timeRange, setTimeRange] = useState<TimeRange>('12w');
   const [dataPoints, setDataPoints] = useState<DataPoint[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(300);
 
   useEffect(() => {
     setRepo.getAllExerciseNames().then((names) => {
       setExerciseNames(names);
-      if (names.length > 0 && !selectedExercise) {
-        setSelectedExercise(names[0]);
-      }
+      if (names.length > 0 && !selectedExercise) setSelectedExercise(names[0]);
     });
   }, []);
 
   useEffect(() => {
+    if (containerRef.current) {
+      setChartWidth(containerRef.current.offsetWidth - 32);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!selectedExercise) return;
-    loadChartData();
+    loadData();
   }, [selectedExercise, chartType, timeRange]);
 
-  async function loadChartData() {
-    if (!selectedExercise) return;
+  const loadData = async () => {
     const db = getDatabase();
-
-    let cutoffDate: string | null = null;
+    let dateFilter = '';
     const now = new Date();
-    if (timeRange === '4w') cutoffDate = new Date(now.getTime() - 28 * 86400000).toISOString();
-    else if (timeRange === '12w') cutoffDate = new Date(now.getTime() - 84 * 86400000).toISOString();
-    else if (timeRange === '6m') cutoffDate = new Date(now.getTime() - 180 * 86400000).toISOString();
-
-    const dateFilter = cutoffDate ? `AND w.start_time >= ?` : '';
-    const params: (string | number)[] = [selectedExercise!];
-    if (cutoffDate) params.push(cutoffDate);
+    if (timeRange === '4w') {
+      const d = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000);
+      dateFilter = `AND w.start_time >= '${d.toISOString()}'`;
+    } else if (timeRange === '12w') {
+      const d = new Date(now.getTime() - 84 * 24 * 60 * 60 * 1000);
+      dateFilter = `AND w.start_time >= '${d.toISOString()}'`;
+    } else if (timeRange === '6m') {
+      const d = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+      dateFilter = `AND w.start_time >= '${d.toISOString()}'`;
+    }
 
     const rows = await db.getAllAsync<{
       workout_id: number;
@@ -74,17 +62,17 @@ export default function GraphsScreen() {
       `SELECT ws.workout_id, w.start_time, ws.reps, ws.weight
        FROM workout_sets ws
        JOIN workouts w ON w.id = ws.workout_id
-       WHERE ws.exercise_name = ? AND ws.completed_at IS NOT NULL AND w.status = 'completed'
-       ${dateFilter}
+       WHERE ws.exercise_name = ? AND ws.completed_at IS NOT NULL AND ws.is_warmup = 0
+       AND w.status = 'completed' ${dateFilter}
        ORDER BY w.start_time`,
-      params
+      [selectedExercise]
     );
 
     // Group by workout
-    const byWorkout = new Map<number, { date: Date; sets: { reps: number; weight: number }[] }>();
+    const byWorkout = new Map<number, { date: string; sets: { reps: number; weight: number }[] }>();
     for (const row of rows) {
       if (!byWorkout.has(row.workout_id)) {
-        byWorkout.set(row.workout_id, { date: new Date(row.start_time), sets: [] });
+        byWorkout.set(row.workout_id, { date: row.start_time, sets: [] });
       }
       byWorkout.get(row.workout_id)!.sets.push({ reps: row.reps, weight: row.weight });
     }
@@ -96,236 +84,109 @@ export default function GraphsScreen() {
         value = Math.max(...sets.map((s) => s.weight));
       } else if (chartType === 'volume') {
         value = sets.reduce((sum, s) => sum + s.reps * s.weight, 0);
-      } else if (chartType === 'estimated_1rm') {
+      } else {
         value = Math.max(...sets.map((s) => estimatedOneRepMax(s.weight, s.reps)));
       }
       points.push({ date, value });
     }
-
     setDataPoints(points);
-  }
-
-  const colors = {
-    bg: isDark ? '#000' : '#F2F2F7',
-    card: isDark ? '#1C1C1E' : '#FFF',
-    text: isDark ? '#FFF' : '#000',
-    secondaryText: isDark ? '#8E8E93' : '#6C6C70',
-    accent: '#007AFF',
-    border: isDark ? '#38383A' : '#E5E5EA',
-    chartLine: '#007AFF',
-    chartGrid: isDark ? '#38383A' : '#E5E5EA',
   };
 
-  const screenWidth = Dimensions.get('window').width;
-  const chartWidth = screenWidth - 32;
+  const chartHeight = 200;
+  const padding = { top: 20, right: 10, bottom: 30, left: 50 };
+  const plotWidth = chartWidth - padding.left - padding.right;
+  const plotHeight = chartHeight - padding.top - padding.bottom;
 
-  const renderChart = () => {
-    if (dataPoints.length === 0) {
-      return (
-        <View style={[styles.chartPlaceholder, { backgroundColor: colors.card }]}>
-          <Text style={{ color: colors.secondaryText }}>No data for this exercise yet</Text>
-        </View>
-      );
-    }
+  const minVal = dataPoints.length > 0 ? Math.min(...dataPoints.map((d) => d.value)) * 0.9 : 0;
+  const maxVal = dataPoints.length > 0 ? Math.max(...dataPoints.map((d) => d.value)) * 1.1 : 100;
+  const valRange = maxVal - minVal || 1;
 
-    const values = dataPoints.map((p) => p.value);
-    const minVal = Math.min(...values);
-    const maxVal = Math.max(...values);
-    const range = maxVal - minVal || 1;
-
-    const xScale = (i: number) =>
-      CHART_PADDING + (i / Math.max(dataPoints.length - 1, 1)) * (chartWidth - CHART_PADDING * 2);
-    const yScale = (v: number) =>
-      CHART_HEIGHT - CHART_PADDING - ((v - minVal) / range) * (CHART_HEIGHT - CHART_PADDING * 2);
-
-    const pointsStr = dataPoints.map((p, i) => `${xScale(i)},${yScale(p.value)}`).join(' ');
-
-    return (
-      <View style={[styles.chartContainer, { backgroundColor: colors.card }]}>
-        <Svg width={chartWidth} height={CHART_HEIGHT}>
-          {/* Grid lines */}
-          {[0, 0.25, 0.5, 0.75, 1].map((pct) => {
-            const y = CHART_PADDING + pct * (CHART_HEIGHT - CHART_PADDING * 2);
-            const val = maxVal - pct * range;
-            return (
-              <React.Fragment key={pct}>
-                <Line
-                  x1={CHART_PADDING}
-                  y1={y}
-                  x2={chartWidth - CHART_PADDING}
-                  y2={y}
-                  stroke={colors.chartGrid}
-                  strokeWidth={0.5}
-                />
-                <SvgText
-                  x={CHART_PADDING - 4}
-                  y={y + 4}
-                  textAnchor="end"
-                  fontSize={10}
-                  fill={colors.secondaryText}
-                >
-                  {Math.round(val)}
-                </SvgText>
-              </React.Fragment>
-            );
-          })}
-
-          {/* Line */}
-          {dataPoints.length > 1 && (
-            <Polyline
-              points={pointsStr}
-              fill="none"
-              stroke={colors.chartLine}
-              strokeWidth={2}
-            />
-          )}
-
-          {/* Points */}
-          {dataPoints.map((p, i) => (
-            <Circle
-              key={i}
-              cx={xScale(i)}
-              cy={yScale(p.value)}
-              r={4}
-              fill={colors.chartLine}
-            />
-          ))}
-        </Svg>
-      </View>
-    );
-  };
-
-  const chartTypes: { key: ChartType; label: string }[] = [
-    { key: 'weight', label: 'Weight' },
-    { key: 'volume', label: 'Volume' },
-    { key: 'estimated_1rm', label: 'Est. 1RM' },
-  ];
-
-  const timeRanges: { key: TimeRange; label: string }[] = [
-    { key: '4w', label: '4W' },
-    { key: '12w', label: '12W' },
-    { key: '6m', label: '6M' },
-    { key: 'all', label: 'All' },
-  ];
+  const polylinePoints = dataPoints
+    .map((d, i) => {
+      const x = padding.left + (dataPoints.length > 1 ? (i / (dataPoints.length - 1)) * plotWidth : plotWidth / 2);
+      const y = padding.top + plotHeight - ((d.value - minVal) / valRange) * plotHeight;
+      return `${x},${y}`;
+    })
+    .join(' ');
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.bg }]}>
+    <div ref={containerRef}>
       {/* Exercise selector */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.exerciseScroll}>
+      <div style={{ display: 'flex', gap: 8, padding: '12px 16px', overflowX: 'auto' }}>
         {exerciseNames.map((name) => (
-          <TouchableOpacity
+          <button
             key={name}
-            style={[
-              styles.exercisePill,
-              {
-                backgroundColor: name === selectedExercise ? colors.accent : colors.card,
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={() => setSelectedExercise(name)}
+            onClick={() => setSelectedExercise(name)}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 20,
+              border: 'none',
+              background: name === selectedExercise ? 'var(--accent)' : 'var(--card)',
+              color: name === selectedExercise ? '#FFF' : 'var(--text)',
+              fontSize: 14,
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+            }}
           >
-            <Text
-              style={{
-                color: name === selectedExercise ? '#FFF' : colors.text,
-                fontSize: 14,
-                fontWeight: '600',
-              }}
-            >
-              {name}
-            </Text>
-          </TouchableOpacity>
+            {name}
+          </button>
         ))}
-      </ScrollView>
+      </div>
 
       {/* Chart type tabs */}
-      <View style={styles.tabRow}>
-        {chartTypes.map((ct) => (
-          <TouchableOpacity
-            key={ct.key}
-            style={[
-              styles.tab,
-              {
-                backgroundColor: chartType === ct.key ? colors.accent : 'transparent',
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={() => setChartType(ct.key)}
-          >
-            <Text
-              style={{
-                color: chartType === ct.key ? '#FFF' : colors.text,
-                fontWeight: '600',
-              }}
-            >
-              {ct.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <div style={{ padding: '0 16px' }}>
+        <div className="segmented">
+          {(['weight', 'volume', 'estimated_1rm'] as ChartType[]).map((t) => (
+            <button key={t} className={chartType === t ? 'active' : ''} onClick={() => setChartType(t)}>
+              {t === 'weight' ? 'Weight' : t === 'volume' ? 'Volume' : 'Est. 1RM'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Time range tabs */}
+      <div style={{ padding: '8px 16px' }}>
+        <div className="segmented">
+          {(['4w', '12w', '6m', 'all'] as TimeRange[]).map((r) => (
+            <button key={r} className={timeRange === r ? 'active' : ''} onClick={() => setTimeRange(r)}>
+              {r === '4w' ? '4W' : r === '12w' ? '12W' : r === '6m' ? '6M' : 'All'}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Chart */}
-      {renderChart()}
-
-      {/* Time range */}
-      <View style={styles.tabRow}>
-        {timeRanges.map((tr) => (
-          <TouchableOpacity
-            key={tr.key}
-            style={[
-              styles.tab,
-              {
-                backgroundColor: timeRange === tr.key ? colors.accent : 'transparent',
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={() => setTimeRange(tr.key)}
-          >
-            <Text
-              style={{
-                color: timeRange === tr.key ? '#FFF' : colors.text,
-                fontWeight: '600',
-              }}
-            >
-              {tr.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </ScrollView>
+      <div className="card">
+        {dataPoints.length === 0 ? (
+          <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 40 }}>
+            No data for this exercise.
+          </div>
+        ) : (
+          <svg width={chartWidth} height={chartHeight} style={{ display: 'block' }}>
+            {/* Grid lines */}
+            {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
+              const y = padding.top + plotHeight * (1 - frac);
+              const val = minVal + valRange * frac;
+              return (
+                <g key={frac}>
+                  <line x1={padding.left} y1={y} x2={padding.left + plotWidth} y2={y} stroke="var(--border)" strokeWidth={0.5} />
+                  <text x={padding.left - 6} y={y + 4} textAnchor="end" fontSize={10} fill="var(--text-secondary)">
+                    {Math.round(val)}
+                  </text>
+                </g>
+              );
+            })}
+            {/* Data line */}
+            <polyline points={polylinePoints} fill="none" stroke="var(--accent)" strokeWidth={2} />
+            {/* Data points */}
+            {dataPoints.map((d, i) => {
+              const x = padding.left + (dataPoints.length > 1 ? (i / (dataPoints.length - 1)) * plotWidth : plotWidth / 2);
+              const y = padding.top + plotHeight - ((d.value - minVal) / valRange) * plotHeight;
+              return <circle key={i} cx={x} cy={y} r={4} fill="var(--accent)" />;
+            })}
+          </svg>
+        )}
+      </div>
+    </div>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  exerciseScroll: { paddingHorizontal: 12, paddingTop: 16 },
-  exercisePill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginHorizontal: 4,
-    borderWidth: 1,
-  },
-  tabRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginVertical: 12,
-    gap: 8,
-  },
-  tab: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  chartContainer: {
-    marginHorizontal: 16,
-    borderRadius: 12,
-    padding: 8,
-  },
-  chartPlaceholder: {
-    marginHorizontal: 16,
-    borderRadius: 12,
-    padding: 40,
-    alignItems: 'center',
-  },
-});

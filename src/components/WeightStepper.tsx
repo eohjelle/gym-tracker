@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, useColorScheme } from 'react-native';
+import { useState } from 'react';
 
 interface Props {
   value: number;
@@ -11,18 +10,9 @@ interface Props {
 export default function WeightStepper({ value, increment, unit, onChange }: Props) {
   const [isEditing, setIsEditing] = useState(false);
   const [textValue, setTextValue] = useState('');
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-
-  const colors = {
-    text: isDark ? '#FFF' : '#000',
-    buttonBg: isDark ? '#2C2C2E' : '#E5E5EA',
-    accent: '#007AFF',
-  };
 
   const handleDecrement = () => {
-    const newVal = Math.max(0, value - increment);
-    onChange(newVal);
+    onChange(Math.max(0, value - increment));
   };
 
   const handleIncrement = () => {
@@ -45,79 +35,81 @@ export default function WeightStepper({ value, increment, unit, onChange }: Prop
   const displayValue = value % 1 === 0 ? value.toString() : value.toFixed(1);
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: colors.buttonBg }]}
-        onPress={handleDecrement}
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+      <button
+        onClick={handleDecrement}
+        style={{
+          width: 72,
+          height: 56,
+          borderRadius: 12,
+          border: 'none',
+          background: 'var(--input-bg)',
+          color: 'var(--accent)',
+          fontSize: 18,
+          fontWeight: 700,
+          cursor: 'pointer',
+        }}
       >
-        <Text style={[styles.buttonText, { color: colors.accent }]}>-{increment}</Text>
-      </TouchableOpacity>
+        -{increment}
+      </button>
 
       {isEditing ? (
-        <TextInput
-          style={[styles.valueInput, { color: colors.text }]}
+        <input
+          type="number"
           value={textValue}
-          onChangeText={setTextValue}
+          onChange={(e) => setTextValue(e.target.value)}
           onBlur={handleEndEdit}
-          onSubmitEditing={handleEndEdit}
-          keyboardType="decimal-pad"
+          onKeyDown={(e) => e.key === 'Enter' && handleEndEdit()}
           autoFocus
-          selectTextOnFocus
+          style={{
+            fontSize: 36,
+            fontWeight: 800,
+            textAlign: 'center',
+            minWidth: 100,
+            width: 120,
+            borderBottom: '2px solid var(--accent)',
+            background: 'none',
+            border: 'none',
+            borderBottomWidth: 2,
+            borderBottomStyle: 'solid',
+            borderBottomColor: 'var(--accent)',
+            color: 'var(--text)',
+            padding: 0,
+          }}
         />
       ) : (
-        <TouchableOpacity onPress={handleStartEdit} style={styles.valueContainer}>
-          <Text style={[styles.value, { color: colors.text }]}>{displayValue}</Text>
-          <Text style={[styles.unit, { color: colors.text }]}>{unit}</Text>
-        </TouchableOpacity>
+        <button
+          onClick={handleStartEdit}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            textAlign: 'center',
+            minWidth: 100,
+            padding: 0,
+          }}
+        >
+          <div style={{ fontSize: 36, fontWeight: 800, color: 'var(--text)' }}>{displayValue}</div>
+          <div style={{ fontSize: 14, marginTop: -2, color: 'var(--text)' }}>{unit}</div>
+        </button>
       )}
 
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: colors.buttonBg }]}
-        onPress={handleIncrement}
+      <button
+        onClick={handleIncrement}
+        style={{
+          width: 72,
+          height: 56,
+          borderRadius: 12,
+          border: 'none',
+          background: 'var(--input-bg)',
+          color: 'var(--accent)',
+          fontSize: 18,
+          fontWeight: 700,
+          cursor: 'pointer',
+        }}
       >
-        <Text style={[styles.buttonText, { color: colors.accent }]}>+{increment}</Text>
-      </TouchableOpacity>
-    </View>
+        +{increment}
+      </button>
+    </div>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  button: {
-    width: 72,
-    height: 56,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  buttonText: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  valueContainer: {
-    alignItems: 'center',
-    minWidth: 100,
-  },
-  value: {
-    fontSize: 36,
-    fontWeight: '800',
-  },
-  unit: {
-    fontSize: 14,
-    marginTop: -2,
-  },
-  valueInput: {
-    fontSize: 36,
-    fontWeight: '800',
-    textAlign: 'center',
-    minWidth: 100,
-    borderBottomWidth: 2,
-    borderBottomColor: '#007AFF',
-    paddingBottom: 4,
-  },
-});
