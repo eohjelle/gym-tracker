@@ -53,7 +53,7 @@ function UpdateToast() {
         boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
       }}
     >
-      Update available — tap to refresh
+      Update available - tap to refresh
     </div>
   );
 }
