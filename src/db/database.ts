@@ -123,7 +123,7 @@ export async function initDatabase(): Promise<WebDatabase> {
   if (db) return db;
 
   const SQL = await initSqlJs({
-    locateFile: (file: string) => `/${file}`,
+    locateFile: (file: string) => `${import.meta.env.BASE_URL}${file}`,
   });
 
   // Try to load existing DB from IndexedDB
