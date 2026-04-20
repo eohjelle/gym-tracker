@@ -9,7 +9,7 @@
           "sets": 3, "target_reps": 5, "target_rir": 2, "rest_seconds": 180,
           "superset_group": null, "starting_weight": 135,
           "small_increment": 5, "large_increment": 10,
-          "warmup": { "sets": 3, "min_weight": 135, "min_increment": 10 }
+          "warmup": { "sets": 3, "min_weight": 45, "min_increment": 10 }
         },
         {
           "name": "Chin-up",
@@ -102,8 +102,8 @@
         },
         {
           "name": "Dumbbell Bicep Curl",
-          "sets": 3, "target_reps": 5, "target_rir": 2, "rest_seconds": 30,
-          "superset_group": "2", "starting_weight": 40,
+          "sets": 3, "target_reps": 8, "target_rir": 2, "rest_seconds": 30,
+          "superset_group": "2", "starting_weight": 30,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
         }
