@@ -56,8 +56,8 @@ async function supabaseUpsert(config: SupabaseConfig, table: string, rows: objec
   }
 }
 
-async function supabaseDelete(config: SupabaseConfig, table: string, id: number): Promise<void> {
-  const response = await fetch(`${config.url}/rest/v1/${table}?id=eq.${id}`, {
+async function supabaseDelete(config: SupabaseConfig, table: string, column: string, value: number): Promise<void> {
+  const response = await fetch(`${config.url}/rest/v1/${table}?${column}=eq.${value}`, {
     method: 'DELETE',
     headers: headers(config),
   });
@@ -106,14 +106,20 @@ export async function syncAll(): Promise<{ synced: number }> {
     }
   }
 
-  // Process deletes first (child tables before parent for foreign keys)
-  const deleteOrder = ['personal_records', 'workout_sets', 'workouts'];
-  for (const table of deleteOrder) {
-    const ids = deletes.get(table);
-    if (!ids) continue;
-    for (const id of ids) {
-      await supabaseDelete(config, table, id);
-    }
+  // Process deletes (cascade children before deleting parent)
+  // For workout deletes, explicitly delete children by foreign key first
+  const workoutDeletes = deletes.get('workouts') ?? [];
+  for (const id of workoutDeletes) {
+    await supabaseDelete(config, 'personal_records', 'workout_id', id);
+    await supabaseDelete(config, 'workout_sets', 'workout_id', id);
+    await supabaseDelete(config, 'workouts', 'id', id);
+  }
+  // Handle standalone child deletes (not part of a workout delete)
+  for (const id of deletes.get('personal_records') ?? []) {
+    await supabaseDelete(config, 'personal_records', 'id', id);
+  }
+  for (const id of deletes.get('workout_sets') ?? []) {
+    await supabaseDelete(config, 'workout_sets', 'id', id);
   }
 
   // Process upserts (parent tables first for foreign keys)
