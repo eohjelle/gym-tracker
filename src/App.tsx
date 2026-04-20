@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import './App.css';
 import { DatabaseProvider } from './context/DatabaseContext';
 import { SettingsProvider } from './context/SettingsContext';
@@ -10,6 +11,52 @@ import SettingsScreen from './screens/SettingsScreen';
 import ActiveWorkoutScreen from './screens/ActiveWorkoutScreen';
 import WorkoutSummaryScreen from './screens/WorkoutSummaryScreen';
 import WorkoutDetailScreen from './screens/WorkoutDetailScreen';
+
+function UpdateToast() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+
+    navigator.serviceWorker.ready.then((registration) => {
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'activated') {
+            setShow(true);
+          }
+        });
+      });
+    });
+  }, []);
+
+  if (!show) return null;
+
+  return (
+    <div
+      onClick={() => window.location.reload()}
+      style={{
+        position: 'fixed',
+        top: 16,
+        left: 16,
+        right: 16,
+        padding: '12px 16px',
+        background: 'var(--accent)',
+        color: '#FFF',
+        borderRadius: 12,
+        fontSize: 15,
+        fontWeight: 600,
+        textAlign: 'center',
+        zIndex: 200,
+        cursor: 'pointer',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+      }}
+    >
+      Update available — tap to refresh
+    </div>
+  );
+}
 
 function AppContent() {
   const { route, activeTab, setActiveTab } = useNavigation();
@@ -36,6 +83,7 @@ function AppContent() {
 
   return (
     <div className="app">
+      <UpdateToast />
       <div className="screen-content">
         {screen}
       </div>
