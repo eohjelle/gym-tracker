@@ -103,23 +103,46 @@ export function computeSuggestedWeight(
 }
 
 /**
- * Get the last two sessions' last-set data for an exercise,
- * used to compute progression.
+ * Get the last two sessions' last-set data for an exercise, used to compute
+ * progression. A session only counts if the final planned working set
+ * (highest set_number among non-warmup, non-extra sets) was completed.
+ * If the last planned set was skipped, the whole workout is ignored.
+ *
+ * Relies on these invariants, maintained elsewhere:
+ *   1. All planned sets (warmups + working) are inserted upfront at workout
+ *      start with is_extra=0 and stable set_numbers — see
+ *      setRepository.addPlannedSets. Working set_numbers never shift based on
+ *      which warmups the user actually completes.
+ *   2. Any set added mid-workout (+ Set / + Warmup) is inserted with
+ *      is_extra=1 — see setRepository.addFreeSet.
+ *   3. Skipping a set leaves completed_at NULL; the row is not deleted.
+ * If any of these change, MAX(set_number) WHERE is_warmup=0 AND is_extra=0
+ * may no longer identify the final planned working set and this query breaks.
  */
 export async function getLastTwoSessionsForExercise(
   exerciseName: string
 ): Promise<{ lastSession: SessionSummary | null; prevSession: SessionSummary | null }> {
   const db = getDatabase();
 
-  // Get last 2 completed non-deload workouts containing planned working sets for this exercise
-  const workouts = await db.getAllAsync<{ workout_id: number }>(
-    `SELECT DISTINCT ws.workout_id
+  const rows = await db.getAllAsync<{
+    weight: number;
+    reps: number;
+    estimated_rir: number | null;
+  }>(
+    `SELECT ws.weight, ws.reps, ws.estimated_rir
      FROM workout_sets ws
      JOIN workouts w ON w.id = ws.workout_id
      WHERE ws.exercise_name = ?
-       AND ws.completed_at IS NOT NULL
        AND ws.is_warmup = 0
        AND ws.is_extra = 0
+       AND ws.completed_at IS NOT NULL
+       AND ws.set_number = (
+         SELECT MAX(set_number) FROM workout_sets
+         WHERE workout_id = ws.workout_id
+           AND exercise_name = ws.exercise_name
+           AND is_warmup = 0
+           AND is_extra = 0
+       )
        AND w.status = 'completed'
        AND w.is_deload = 0
      ORDER BY w.start_time DESC
@@ -127,31 +150,9 @@ export async function getLastTwoSessionsForExercise(
     [exerciseName]
   );
 
-  const sessions: SessionSummary[] = [];
-
-  for (const { workout_id } of workouts) {
-    // Get the last completed planned working set for this exercise in this workout
-    const lastSet = await db.getFirstAsync<{
-      weight: number;
-      reps: number;
-      estimated_rir: number | null;
-    }>(
-      `SELECT weight, reps, estimated_rir
-       FROM workout_sets
-       WHERE workout_id = ? AND exercise_name = ? AND completed_at IS NOT NULL AND is_warmup = 0 AND is_extra = 0
-       ORDER BY set_number DESC
-       LIMIT 1`,
-      [workout_id, exerciseName]
-    );
-
-    if (lastSet && lastSet.weight !== null && lastSet.reps !== null) {
-      sessions.push({
-        weight: lastSet.weight,
-        reps: lastSet.reps,
-        estimated_rir: lastSet.estimated_rir,
-      });
-    }
-  }
+  const sessions: SessionSummary[] = rows
+    .filter((r) => r.weight !== null && r.reps !== null)
+    .map((r) => ({ weight: r.weight, reps: r.reps, estimated_rir: r.estimated_rir }));
 
   return {
     lastSession: sessions[0] ?? null,
