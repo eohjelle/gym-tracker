@@ -4,7 +4,8 @@ export type Route =
   | { screen: 'tabs'; tab: 'home' | 'history' | 'graphs' | 'settings' }
   | { screen: 'activeWorkout' }
   | { screen: 'workoutSummary'; workoutId: number }
-  | { screen: 'workoutDetail'; workoutId: number };
+  | { screen: 'workoutDetail'; workoutId: number }
+  | { screen: 'workoutPreview'; programWorkoutId: number; isDeload: boolean };
 
 interface NavigationContextValue {
   route: Route;

@@ -11,6 +11,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import ActiveWorkoutScreen from './screens/ActiveWorkoutScreen';
 import WorkoutSummaryScreen from './screens/WorkoutSummaryScreen';
 import WorkoutDetailScreen from './screens/WorkoutDetailScreen';
+import WorkoutPreviewScreen from './screens/WorkoutPreviewScreen';
 
 function UpdateToast() {
   const [show, setShow] = useState(false);
@@ -69,6 +70,8 @@ function AppContent() {
     screen = <WorkoutSummaryScreen workoutId={route.workoutId} />;
   } else if (route.screen === 'workoutDetail') {
     screen = <WorkoutDetailScreen workoutId={route.workoutId} />;
+  } else if (route.screen === 'workoutPreview') {
+    screen = <WorkoutPreviewScreen programWorkoutId={route.programWorkoutId} isDeload={route.isDeload} />;
   } else {
     // Tab screens
     switch (activeTab) {

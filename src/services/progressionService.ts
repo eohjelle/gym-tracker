@@ -188,6 +188,21 @@ export async function getProgressionForExercise(
   return computeSuggestedWeight(exercise, lastSession, prevSession, prevReasoning);
 }
 
+/**
+ * Scale a suggested weight by a deload multiplier, rounded to the exercise's
+ * warmup increment (or small_increment fallback) and floored at warmup_min_weight.
+ */
+export function applyDeload(
+  exercise: ProgramExerciseRow,
+  suggestedWeight: number,
+  multiplier = 0.7
+): number {
+  const raw = suggestedWeight * multiplier;
+  const inc = exercise.warmup_min_increment ?? exercise.small_increment;
+  const minW = exercise.warmup_min_weight ?? 0;
+  return Math.max(minW, Math.round(raw / inc) * inc);
+}
+
 export function formatProgressionReasoning(result: ProgressionResult, unit: string): string {
   switch (result.reasoning) {
     case 'first_session':

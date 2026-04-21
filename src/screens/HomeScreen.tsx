@@ -8,7 +8,7 @@ import * as programRepo from '../db/repositories/programRepository';
 import { FullProgram } from '../db/repositories/programRepository';
 import { formatDuration, formatDate } from '../utils/formatters';
 import { getNextWorkoutInCycle } from '../services/programService';
-import { getProgressionForExercise, ProgressionResult } from '../services/progressionService';
+import { getProgressionForExercise, applyDeload, ProgressionResult } from '../services/progressionService';
 import { generateWarmupSets } from '../services/warmupService';
 import { PlannedSet } from '../db/repositories/setRepository';
 
@@ -61,8 +61,6 @@ export default function HomeScreen() {
     loadData();
   }, [loadData]);
 
-  const DELOAD_MULTIPLIER = 0.7;
-
   const handleStartProgramWorkout = async (workoutId?: number) => {
     if (!fullProgram) return;
     const targetId = workoutId ?? selectedWorkoutId;
@@ -76,13 +74,9 @@ export default function HomeScreen() {
       const progression = await getProgressionForExercise(exercise);
       progressions.set(exercise.name, progression);
 
-      let workingWeight = progression.suggestedWeight;
-      if (deloadMode) {
-        const rawDeload = progression.suggestedWeight * DELOAD_MULTIPLIER;
-        const inc = exercise.warmup_min_increment ?? exercise.small_increment;
-        const minW = exercise.warmup_min_weight ?? 0;
-        workingWeight = Math.max(minW, Math.round(rawDeload / inc) * inc);
-      }
+      const workingWeight = deloadMode
+        ? applyDeload(exercise, progression.suggestedWeight)
+        : progression.suggestedWeight;
 
       let setNum = 1;
 
@@ -220,10 +214,38 @@ export default function HomeScreen() {
           </button>
 
           <button
+            onClick={() => {
+              if (selectedWorkoutId == null) return;
+              navigate({
+                screen: 'workoutPreview',
+                programWorkoutId: selectedWorkoutId,
+                isDeload: deloadMode,
+              });
+            }}
+            disabled={selectedWorkoutId == null}
+            style={{
+              display: 'block',
+              width: '100%',
+              marginTop: 12,
+              padding: '10px 14px',
+              borderRadius: 8,
+              border: '2px solid var(--accent)',
+              background: 'none',
+              color: 'var(--accent)',
+              fontSize: 15,
+              fontWeight: 600,
+              textAlign: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            Preview Workout
+          </button>
+
+          <button
             className="btn btn-accent"
             onClick={() => handleStartProgramWorkout()}
             style={{
-              marginTop: 16,
+              marginTop: 12,
               background: deloadMode ? '#FF9500' : undefined,
             }}
           >
