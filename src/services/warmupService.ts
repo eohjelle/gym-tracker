@@ -26,8 +26,8 @@ export function generateWarmupSets(
 
   for (let i = 0; i < sets; i++) {
     const rawWeight = min_weight + rawStep * i;
-    // Round to nearest min_increment
-    const rounded = Math.round(rawWeight / min_increment) * min_increment;
+    // Round to nearest min_increment above min_weight (plates come in pairs on top of the bar)
+    const rounded = min_weight + Math.round((rawWeight - min_weight) / min_increment) * min_increment;
     // Ensure at least min_weight and below working weight
     const weight = Math.max(min_weight, Math.min(rounded, workingWeight - min_increment));
 
