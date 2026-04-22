@@ -4,7 +4,8 @@ export interface WarmupSet {
 }
 
 /**
- * Generate warmup sets ramping from min_weight to just below workingWeight.
+ * Generate warmup sets ramping from min_weight (the empty bar) to just below
+ * workingWeight. The first set is always min_weight.
  *
  * Each warmup weight is a multiple of min_increment, at or above min_weight.
  * Reps decrease as weight increases (e.g., 8, 5, 3 for 3 sets).
@@ -18,13 +19,12 @@ export function generateWarmupSets(
   if (sets <= 0 || workingWeight <= min_weight) return [];
 
   const results: WarmupSet[] = [];
-  const intervals = sets + 1;
-  const rawStep = (workingWeight - min_weight) / intervals;
+  const rawStep = (workingWeight - min_weight) / sets;
 
   // Descending reps pattern based on number of warmup sets
   const repPattern = getRepPattern(sets);
 
-  for (let i = 1; i <= sets; i++) {
+  for (let i = 0; i < sets; i++) {
     const rawWeight = min_weight + rawStep * i;
     // Round to nearest min_increment
     const rounded = Math.round(rawWeight / min_increment) * min_increment;
@@ -33,7 +33,7 @@ export function generateWarmupSets(
 
     results.push({
       weight,
-      reps: repPattern[i - 1],
+      reps: repPattern[i],
     });
   }
 
