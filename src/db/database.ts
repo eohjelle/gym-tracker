@@ -180,20 +180,11 @@ async function runMigrations(database: WebDatabase): Promise<void> {
   }
 }
 
-async function syncPrograms(database: WebDatabase): Promise<void> {
+async function syncPrograms(_database: WebDatabase): Promise<void> {
   const { programs } = await import('../../programs/index');
+  const { syncProgramDefinition } = await import('./repositories/programRepository');
 
-  for (let i = 0; i < programs.length; i++) {
-    const prog = programs[i];
-    const existing = await database.getFirstAsync<{ id: number }>(
-      'SELECT id FROM programs WHERE name = ?',
-      [prog.name]
-    );
-
-    if (!existing) {
-      // Import as a new program via the program repository
-      const { saveProgram } = await import('./repositories/programRepository');
-      await saveProgram(prog);
-    }
+  for (const prog of programs) {
+    await syncProgramDefinition(prog);
   }
 }
