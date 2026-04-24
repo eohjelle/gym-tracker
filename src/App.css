@@ -38,7 +38,8 @@
 }
 
 html, body, #root {
-  height: 100dvh;
+  height: 100vh;
+  height: 100lvh;
   overflow: hidden;
   font-family: var(--font);
   background: var(--bg);
@@ -51,7 +52,8 @@ html, body, #root {
 .app {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  height: 100vh;
+  height: 100lvh;
 }
 
 .screen-content {
@@ -98,7 +100,8 @@ html, body, #root {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100dvh;
+  height: 100vh;
+  height: 100lvh;
   color: var(--text-secondary);
   font-size: 16px;
 }
