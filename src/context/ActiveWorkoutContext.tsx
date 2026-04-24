@@ -3,7 +3,6 @@ import { WorkoutRow, WorkoutSetRow, ProgramExerciseRow } from '../db/types';
 import * as workoutRepo from '../db/repositories/workoutRepository';
 import * as setRepo from '../db/repositories/setRepository';
 import * as programRepo from '../db/repositories/programRepository';
-import { checkAndUpdatePRs } from '../db/repositories/personalRecordRepository';
 import { useSettings } from './SettingsContext';
 import { ProgressionResult, getProgressionForExercise } from '../services/progressionService';
 import { syncAll } from '../services/syncService';
@@ -175,19 +174,9 @@ export function ActiveWorkoutProvider({ children }: { children: React.ReactNode 
         notes: data.notes,
         estimatedRir: data.estimatedRir,
       });
-      // Reload sets
       if (workout) {
         const updatedSets = await setRepo.getSetsForWorkout(workout.id);
         setSets(updatedSets);
-
-        // Check PRs silently
-        const exerciseName = updatedSets.find((s) => s.id === setId)?.exercise_name;
-        if (exerciseName) {
-          const exerciseSets = updatedSets.filter(
-            (s) => s.exercise_name === exerciseName && s.completed_at != null
-          );
-          await checkAndUpdatePRs(workout.id, exerciseName, exerciseSets);
-        }
       }
     },
     [workout, weightUnit]
@@ -211,12 +200,6 @@ export function ActiveWorkoutProvider({ children }: { children: React.ReactNode 
       });
       const updatedSets = await setRepo.getSetsForWorkout(workout.id);
       setSets(updatedSets);
-
-      // Check PRs
-      const exerciseSets = updatedSets.filter(
-        (s) => s.exercise_name === exerciseName && s.completed_at != null
-      );
-      await checkAndUpdatePRs(workout.id, exerciseName, exerciseSets);
     },
     [workout, weightUnit]
   );

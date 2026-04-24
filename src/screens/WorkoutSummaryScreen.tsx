@@ -2,14 +2,13 @@ import { useEffect, useState } from 'react';
 import { useNavigation } from '../context/NavigationContext';
 import { WorkoutWithSets } from '../db/repositories/workoutRepository';
 import * as workoutRepo from '../db/repositories/workoutRepository';
-import { getPRsForWorkout } from '../db/repositories/personalRecordRepository';
-import { PersonalRecordRow } from '../db/types';
-import { formatDuration, formatWeight } from '../utils/formatters';
+import { getPRsForWorkout, PR } from '../db/repositories/personalRecordRepository';
+import { formatDuration } from '../utils/formatters';
 
 export default function WorkoutSummaryScreen({ workoutId }: { workoutId: number }) {
   const { navigate } = useNavigation();
   const [workout, setWorkout] = useState<WorkoutWithSets | null>(null);
-  const [prs, setPrs] = useState<PersonalRecordRow[]>([]);
+  const [prs, setPrs] = useState<PR[]>([]);
 
   useEffect(() => {
     workoutRepo.getWorkoutWithSets(workoutId).then(setWorkout);
@@ -54,12 +53,12 @@ export default function WorkoutSummaryScreen({ workoutId }: { workoutId: number 
           <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--gold)', marginBottom: 12 }}>
             Personal Records!
           </div>
-          {prs.map((pr) => (
-            <div key={pr.id} style={{ padding: '6px 0' }}>
-              {pr.exercise_name}:{' '}
-              {pr.record_type === 'weight' && pr.reps
+          {prs.map((pr, i) => (
+            <div key={`${pr.exerciseName}-${pr.recordType}-${i}`} style={{ padding: '6px 0' }}>
+              {pr.exerciseName}:{' '}
+              {pr.recordType === 'weight' && pr.reps
                 ? `${pr.value} x ${pr.reps} reps`
-                : pr.record_type === 'estimated_1rm'
+                : pr.recordType === 'estimated_1rm'
                 ? `Est. 1RM: ${Math.round(pr.value)}`
                 : `Volume: ${Math.round(pr.value)}`}
             </div>

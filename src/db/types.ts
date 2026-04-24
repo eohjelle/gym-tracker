@@ -28,16 +28,6 @@ export interface WorkoutSetRow {
   is_warmup: number; // 0 or 1
 }
 
-export interface PersonalRecordRow {
-  id: number;
-  exercise_name: string;
-  record_type: 'weight' | 'estimated_1rm' | 'volume';
-  value: number;
-  reps: number | null;
-  workout_id: number;
-  achieved_at: string;
-}
-
 export interface ProgramRow {
   id: number;
   name: string;

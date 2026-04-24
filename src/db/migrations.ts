@@ -174,4 +174,146 @@ export const migrations: Migration[] = [
       END`,
     ],
   },
+  {
+    version: 6,
+    up: [
+      // Switch sync to in-order replay with row snapshots.
+      // Drop the personal_records table — PRs are now computed on demand from workout_sets.
+      `DROP TRIGGER IF EXISTS sync_workouts_insert`,
+      `DROP TRIGGER IF EXISTS sync_workouts_update`,
+      `DROP TRIGGER IF EXISTS sync_workouts_delete`,
+      `DROP TRIGGER IF EXISTS sync_sets_insert`,
+      `DROP TRIGGER IF EXISTS sync_sets_update`,
+      `DROP TRIGGER IF EXISTS sync_sets_delete`,
+      `DROP TRIGGER IF EXISTS sync_prs_insert`,
+      `DROP TRIGGER IF EXISTS sync_prs_update`,
+      `DROP TRIGGER IF EXISTS sync_prs_delete`,
+      `DROP INDEX IF EXISTS idx_pr_exercise`,
+      `DROP TABLE IF EXISTS personal_records`,
+      `DROP TABLE IF EXISTS sync_queue`,
+      `CREATE TABLE sync_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        operation TEXT NOT NULL CHECK(operation IN ('upsert', 'delete')),
+        row_id INTEGER NOT NULL,
+        snapshot TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      // Seed: re-push all local workouts and sets so Supabase converges with local.
+      // Workouts first so FKs are satisfied on replay.
+      `INSERT INTO sync_queue (table_name, operation, row_id, snapshot)
+        SELECT 'workouts', 'upsert', id, json_object(
+          'id', id,
+          'start_time', start_time,
+          'end_time', end_time,
+          'program_name', program_name,
+          'week', week,
+          'day', day,
+          'type', type,
+          'status', status,
+          'program_workout_id', program_workout_id,
+          'is_deload', is_deload
+        ) FROM workouts ORDER BY id`,
+      `INSERT INTO sync_queue (table_name, operation, row_id, snapshot)
+        SELECT 'workout_sets', 'upsert', id, json_object(
+          'id', id,
+          'workout_id', workout_id,
+          'exercise_name', exercise_name,
+          'set_number', set_number,
+          'reps', reps,
+          'weight', weight,
+          'weight_unit', weight_unit,
+          'notes', notes,
+          'completed_at', completed_at,
+          'is_extra', is_extra,
+          'group_tag', group_tag,
+          'rest_seconds', rest_seconds,
+          'estimated_rir', estimated_rir,
+          'is_warmup', is_warmup
+        ) FROM workout_sets ORDER BY id`,
+      // Triggers log each write as an upsert-with-snapshot or delete-by-id, in order.
+      `CREATE TRIGGER sync_workouts_insert AFTER INSERT ON workouts BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id, snapshot) VALUES (
+          'workouts', 'upsert', NEW.id,
+          json_object(
+            'id', NEW.id,
+            'start_time', NEW.start_time,
+            'end_time', NEW.end_time,
+            'program_name', NEW.program_name,
+            'week', NEW.week,
+            'day', NEW.day,
+            'type', NEW.type,
+            'status', NEW.status,
+            'program_workout_id', NEW.program_workout_id,
+            'is_deload', NEW.is_deload
+          )
+        );
+      END`,
+      `CREATE TRIGGER sync_workouts_update AFTER UPDATE ON workouts BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id, snapshot) VALUES (
+          'workouts', 'upsert', NEW.id,
+          json_object(
+            'id', NEW.id,
+            'start_time', NEW.start_time,
+            'end_time', NEW.end_time,
+            'program_name', NEW.program_name,
+            'week', NEW.week,
+            'day', NEW.day,
+            'type', NEW.type,
+            'status', NEW.status,
+            'program_workout_id', NEW.program_workout_id,
+            'is_deload', NEW.is_deload
+          )
+        );
+      END`,
+      `CREATE TRIGGER sync_workouts_delete AFTER DELETE ON workouts BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id) VALUES ('workouts', 'delete', OLD.id);
+      END`,
+      `CREATE TRIGGER sync_sets_insert AFTER INSERT ON workout_sets BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id, snapshot) VALUES (
+          'workout_sets', 'upsert', NEW.id,
+          json_object(
+            'id', NEW.id,
+            'workout_id', NEW.workout_id,
+            'exercise_name', NEW.exercise_name,
+            'set_number', NEW.set_number,
+            'reps', NEW.reps,
+            'weight', NEW.weight,
+            'weight_unit', NEW.weight_unit,
+            'notes', NEW.notes,
+            'completed_at', NEW.completed_at,
+            'is_extra', NEW.is_extra,
+            'group_tag', NEW.group_tag,
+            'rest_seconds', NEW.rest_seconds,
+            'estimated_rir', NEW.estimated_rir,
+            'is_warmup', NEW.is_warmup
+          )
+        );
+      END`,
+      `CREATE TRIGGER sync_sets_update AFTER UPDATE ON workout_sets BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id, snapshot) VALUES (
+          'workout_sets', 'upsert', NEW.id,
+          json_object(
+            'id', NEW.id,
+            'workout_id', NEW.workout_id,
+            'exercise_name', NEW.exercise_name,
+            'set_number', NEW.set_number,
+            'reps', NEW.reps,
+            'weight', NEW.weight,
+            'weight_unit', NEW.weight_unit,
+            'notes', NEW.notes,
+            'completed_at', NEW.completed_at,
+            'is_extra', NEW.is_extra,
+            'group_tag', NEW.group_tag,
+            'rest_seconds', NEW.rest_seconds,
+            'estimated_rir', NEW.estimated_rir,
+            'is_warmup', NEW.is_warmup
+          )
+        );
+      END`,
+      `CREATE TRIGGER sync_sets_delete AFTER DELETE ON workout_sets BEGIN
+        INSERT INTO sync_queue (table_name, operation, row_id) VALUES ('workout_sets', 'delete', OLD.id);
+      END`,
+    ],
+  },
 ];

@@ -1,5 +1,5 @@
-import { getDatabase } from '../db/database';
-import { WorkoutRow, WorkoutSetRow, PersonalRecordRow } from '../db/types';
+import { getDatabase, WebDatabase } from '../db/database';
+import { WorkoutRow, WorkoutSetRow } from '../db/types';
 
 interface SupabaseConfig {
   url: string;
@@ -9,10 +9,13 @@ interface SupabaseConfig {
 interface SyncQueueEntry {
   id: number;
   table_name: string;
-  operation: string;
+  operation: 'upsert' | 'delete';
   row_id: number;
+  snapshot: string | null;
   created_at: string;
 }
+
+const UPSERT_BATCH_SIZE = 50;
 
 export async function getSupabaseConfig(): Promise<SupabaseConfig | null> {
   const db = getDatabase();
@@ -56,8 +59,8 @@ async function supabaseUpsert(config: SupabaseConfig, table: string, rows: objec
   }
 }
 
-async function supabaseDelete(config: SupabaseConfig, table: string, column: string, value: number): Promise<void> {
-  const response = await fetch(`${config.url}/rest/v1/${table}?${column}=eq.${value}`, {
+async function supabaseDeleteById(config: SupabaseConfig, table: string, id: number): Promise<void> {
+  const response = await fetch(`${config.url}/rest/v1/${table}?id=eq.${id}`, {
     method: 'DELETE',
     headers: headers(config),
   });
@@ -67,79 +70,65 @@ async function supabaseDelete(config: SupabaseConfig, table: string, column: str
   }
 }
 
+async function deleteQueueEntries(db: WebDatabase, entryIds: number[]): Promise<void> {
+  if (entryIds.length === 0) return;
+  const placeholders = entryIds.map(() => '?').join(',');
+  await db.runAsync(`DELETE FROM sync_queue WHERE id IN (${placeholders})`, entryIds);
+}
+
 /**
- * Process the sync queue — push local changes to Supabase.
- * Called automatically after workout completion.
+ * Replay local writes to Supabase in the order they happened.
+ * Consecutive upserts to the same table are batched; deletes run one-at-a-time.
+ * A successful entry is removed from the queue individually so partial progress persists
+ * across retries if a later entry fails.
  */
 export async function syncAll(): Promise<{ synced: number }> {
   const config = await getSupabaseConfig();
   if (!config) throw new Error('Supabase not configured');
 
   const db = getDatabase();
-  const queue = await db.getAllAsync<SyncQueueEntry>(
-    'SELECT * FROM sync_queue ORDER BY id'
-  );
+  let processed = 0;
 
-  if (queue.length === 0) return { synced: 0 };
+  while (true) {
+    const entries = await db.getAllAsync<SyncQueueEntry>(
+      'SELECT * FROM sync_queue ORDER BY id LIMIT 500'
+    );
+    if (entries.length === 0) break;
 
-  // Deduplicate: for each (table, row_id), keep only the last operation.
-  // If any operation is DELETE, the final result is DELETE regardless of earlier inserts/updates.
-  const lastOp = new Map<string, SyncQueueEntry>();
-  for (const entry of queue) {
-    const key = `${entry.table_name}:${entry.row_id}`;
-    lastOp.set(key, entry);
-  }
-
-  // Group by operation type
-  const upserts = new Map<string, number[]>(); // table -> row_ids
-  const deletes = new Map<string, number[]>(); // table -> row_ids
-
-  for (const entry of lastOp.values()) {
-    if (entry.operation === 'DELETE') {
-      const ids = deletes.get(entry.table_name) ?? [];
-      ids.push(entry.row_id);
-      deletes.set(entry.table_name, ids);
-    } else {
-      const ids = upserts.get(entry.table_name) ?? [];
-      ids.push(entry.row_id);
-      upserts.set(entry.table_name, ids);
+    let i = 0;
+    while (i < entries.length) {
+      const head = entries[i];
+      if (head.operation === 'upsert') {
+        const table = head.table_name;
+        const entryIds: number[] = [];
+        const rows: object[] = [];
+        while (
+          i < entries.length &&
+          entries[i].operation === 'upsert' &&
+          entries[i].table_name === table &&
+          entryIds.length < UPSERT_BATCH_SIZE
+        ) {
+          const e = entries[i];
+          if (!e.snapshot) {
+            throw new Error(`sync_queue entry ${e.id} is upsert but has no snapshot`);
+          }
+          entryIds.push(e.id);
+          rows.push(JSON.parse(e.snapshot));
+          i++;
+        }
+        await supabaseUpsert(config, table, rows);
+        await deleteQueueEntries(db, entryIds);
+        processed += entryIds.length;
+      } else {
+        await supabaseDeleteById(config, head.table_name, head.row_id);
+        await deleteQueueEntries(db, [head.id]);
+        processed++;
+        i++;
+      }
     }
   }
 
-  // Process deletes (cascade children before deleting parent)
-  // For workout deletes, explicitly delete children by foreign key first
-  const workoutDeletes = deletes.get('workouts') ?? [];
-  for (const id of workoutDeletes) {
-    await supabaseDelete(config, 'personal_records', 'workout_id', id);
-    await supabaseDelete(config, 'workout_sets', 'workout_id', id);
-    await supabaseDelete(config, 'workouts', 'id', id);
-  }
-  // Handle standalone child deletes (not part of a workout delete)
-  for (const id of deletes.get('personal_records') ?? []) {
-    await supabaseDelete(config, 'personal_records', 'id', id);
-  }
-  for (const id of deletes.get('workout_sets') ?? []) {
-    await supabaseDelete(config, 'workout_sets', 'id', id);
-  }
-
-  // Process upserts (parent tables first for foreign keys)
-  const upsertOrder = ['workouts', 'workout_sets', 'personal_records'];
-  for (const table of upsertOrder) {
-    const ids = upserts.get(table);
-    if (!ids) continue;
-    const placeholders = ids.map(() => '?').join(',');
-    const rows = await db.getAllAsync<WorkoutRow | WorkoutSetRow | PersonalRecordRow>(
-      `SELECT * FROM ${table} WHERE id IN (${placeholders})`,
-      ids
-    );
-    await supabaseUpsert(config, table, rows);
-  }
-
-  // Clear processed queue entries
-  const maxId = queue[queue.length - 1].id;
-  await db.runAsync('DELETE FROM sync_queue WHERE id <= ?', [maxId]);
-
-  return { synced: lastOp.size };
+  return { synced: processed };
 }
 
 /**
@@ -152,7 +141,6 @@ export async function restoreFromCloud(): Promise<{ workouts: number }> {
 
   const db = getDatabase();
 
-  // Fetch all remote data
   const fetchTable = async <T>(table: string): Promise<T[]> => {
     const response = await fetch(`${config.url}/rest/v1/${table}?select=*`, {
       headers: headers(config),
@@ -166,10 +154,7 @@ export async function restoreFromCloud(): Promise<{ workouts: number }> {
 
   const remoteWorkouts = await fetchTable<WorkoutRow>('workouts');
   const remoteSets = await fetchTable<WorkoutSetRow>('workout_sets');
-  const remotePRs = await fetchTable<PersonalRecordRow>('personal_records');
 
-  // Disable sync triggers during restore by clearing the queue after
-  // Insert remote data with upsert (INSERT OR REPLACE)
   for (const w of remoteWorkouts) {
     await db.runAsync(
       `INSERT OR REPLACE INTO workouts (id, start_time, end_time, program_name, week, day, type, status, program_workout_id, is_deload)
@@ -186,15 +171,8 @@ export async function restoreFromCloud(): Promise<{ workouts: number }> {
     );
   }
 
-  for (const p of remotePRs) {
-    await db.runAsync(
-      `INSERT OR REPLACE INTO personal_records (id, exercise_name, record_type, value, reps, workout_id, achieved_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [p.id, p.exercise_name, p.record_type, p.value, p.reps, p.workout_id, p.achieved_at]
-    );
-  }
-
-  // Clear queue entries generated by the restore inserts
+  // The INSERT OR REPLACE above fires triggers that enqueue sync entries.
+  // Those are redundant — we just pulled this state from Supabase — so clear the queue.
   await db.runAsync('DELETE FROM sync_queue');
 
   return { workouts: remoteWorkouts.length };
