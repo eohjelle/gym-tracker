@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { formatTimerSeconds } from '../utils/formatters';
+import { formatTimerSeconds, formatWeight } from '../utils/formatters';
 import { useSettings } from '../context/SettingsContext';
+
+export interface NextSetPreview {
+  exerciseName: string;
+  weight: number;
+  weightUnit: 'kg' | 'lbs';
+  isWarmup: boolean;
+}
 
 interface Props {
   initialSeconds: number;
   onComplete: () => void;
   onSkip: () => void;
+  nextPreview?: NextSetPreview | null;
 }
 
 let audioCtx: AudioContext | null = null;
@@ -26,7 +34,7 @@ function playBeep() {
   }
 }
 
-export default function RestTimer({ initialSeconds, onComplete, onSkip }: Props) {
+export default function RestTimer({ initialSeconds, onComplete, onSkip, nextPreview }: Props) {
   const { timerAlertMode } = useSettings();
   const [remainingSeconds, setRemainingSeconds] = useState(initialSeconds);
   const [isPaused, setIsPaused] = useState(false);
@@ -157,6 +165,20 @@ export default function RestTimer({ initialSeconds, onComplete, onSkip }: Props)
               Skip
             </button>
           </div>
+
+          {nextPreview && (
+            <div style={{ marginTop: 48, textAlign: 'center' }}>
+              <div style={{ color: '#8E8E93', fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+                Up next{nextPreview.isWarmup ? ' · Warmup' : ''}
+              </div>
+              <div style={{ color: '#FFF', fontSize: 20, fontWeight: 700 }}>
+                {nextPreview.exerciseName}
+              </div>
+              <div style={{ color: '#FFF', fontSize: 22, fontWeight: 800, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
+                {formatWeight(nextPreview.weight, nextPreview.weightUnit)}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

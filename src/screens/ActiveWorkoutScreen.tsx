@@ -10,7 +10,7 @@ import { formatProgressionReasoning } from '../services/progressionService';
 import WeightStepper from '../components/WeightStepper';
 import WorkoutOverview from '../components/WorkoutOverview';
 import ExercisePicker from '../components/ExercisePicker';
-import RestTimer from '../components/RestTimer';
+import RestTimer, { NextSetPreview } from '../components/RestTimer';
 
 type ViewMode = 'overview' | 'exercise' | 'set';
 
@@ -302,6 +302,45 @@ export default function ActiveWorkoutScreen() {
 
   if (!workout) return null;
 
+  const getNextSetPreview = (): NextSetPreview | null => {
+    const toPreview = (exerciseName: string, set: WorkoutSetRow): NextSetPreview => ({
+      exerciseName,
+      weight: set.weight ?? 0,
+      weightUnit: set.weight_unit,
+      isWarmup: set.is_warmup === 1,
+    });
+
+    if (pendingSupersetIndex.current != null) {
+      const nextEx = exercises[pendingSupersetIndex.current];
+      const nextSet = nextEx?.sets.find((s) => s.completed_at == null);
+      if (nextEx && nextSet) return toPreview(nextEx.exerciseName, nextSet);
+    }
+
+    if (!currentExercise) return null;
+
+    if (currentExercise.groupTag) {
+      const groupExercises = exercises.filter((e) => e.groupTag === currentExercise.groupTag);
+      for (const ge of groupExercises) {
+        const nextSet = ge.sets.find((s) => s.completed_at == null);
+        if (nextSet) return toPreview(ge.exerciseName, nextSet);
+      }
+    }
+
+    const nextSet = currentExercise.sets.find((s) => s.completed_at == null);
+    if (nextSet) return toPreview(currentExercise.exerciseName, nextSet);
+
+    const nextIdx = exercises.findIndex((e, i) =>
+      i !== currentExerciseIndex && e.sets.some((s) => s.completed_at == null)
+    );
+    if (nextIdx >= 0) {
+      const nextEx = exercises[nextIdx];
+      const next = nextEx.sets.find((s) => s.completed_at == null);
+      if (next) return toPreview(nextEx.exerciseName, next);
+    }
+
+    return null;
+  };
+
   const topBarRightLabel =
     viewMode === 'set' ? 'Exercise' :
     viewMode === 'exercise' ? 'Overview' :
@@ -410,6 +449,7 @@ export default function ActiveWorkoutScreen() {
           initialSeconds={restTimerSeconds}
           onComplete={handleRestDone}
           onSkip={handleRestDone}
+          nextPreview={getNextSetPreview()}
         />
       )}
 
