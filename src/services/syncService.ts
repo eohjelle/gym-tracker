@@ -102,11 +102,15 @@ export async function syncAll(): Promise<{ synced: number }> {
         const table = head.table_name;
         const entryIds: number[] = [];
         const rows: object[] = [];
+        // Postgres rejects ON CONFLICT batches with a repeated conflict target,
+        // so a duplicate row_id ends the current batch — the next entry starts a new one.
+        const seenRowIds = new Set<number>();
         while (
           i < entries.length &&
           entries[i].operation === 'upsert' &&
           entries[i].table_name === table &&
-          entryIds.length < UPSERT_BATCH_SIZE
+          entryIds.length < UPSERT_BATCH_SIZE &&
+          !seenRowIds.has(entries[i].row_id)
         ) {
           const e = entries[i];
           if (!e.snapshot) {
@@ -114,6 +118,7 @@ export async function syncAll(): Promise<{ synced: number }> {
           }
           entryIds.push(e.id);
           rows.push(JSON.parse(e.snapshot));
+          seenRowIds.add(e.row_id);
           i++;
         }
         await supabaseUpsert(config, table, rows);
