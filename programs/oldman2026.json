@@ -114,7 +114,7 @@
       "exercises": [
         {
           "name": "Squat (high bar)",
-          "sets": 3, "target_reps": 8, "target_rir": 2, "rest_seconds": 150,
+          "sets": 3, "target_reps": 8, "target_rir": 2, "rest_seconds": 180,
           "superset_group": null, "starting_weight": 95,
           "small_increment": 5, "large_increment": 10,
           "warmup": { "sets": 4, "min_weight": 45, "min_increment": 10 }
