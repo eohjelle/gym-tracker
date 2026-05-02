@@ -8,19 +8,12 @@ import * as setRepo from '../db/repositories/setRepository';
 import { WorkoutSetRow } from '../db/types';
 import { formatProgressionReasoning } from '../services/progressionService';
 import WeightStepper from '../components/WeightStepper';
+import NumberStepper from '../components/NumberStepper';
 import WorkoutOverview from '../components/WorkoutOverview';
 import ExercisePicker from '../components/ExercisePicker';
 import RestTimer, { NextSetPreview } from '../components/RestTimer';
 
 type ViewMode = 'overview' | 'exercise' | 'set';
-
-function getRirZones(targetRir: number) {
-  return [
-    { label: `< ${targetRir}`, subtitle: 'Too hard', storedValue: Math.max(0, targetRir - 1) },
-    { label: `${targetRir}–${targetRir + 2}`, subtitle: 'Good', storedValue: targetRir },
-    { label: `${targetRir + 3}+`, subtitle: 'Too easy', storedValue: targetRir + 3 },
-  ];
-}
 
 export default function ActiveWorkoutScreen() {
   const { navigate, goBack } = useNavigation();
@@ -49,7 +42,7 @@ export default function ActiveWorkoutScreen() {
   const [restTimerSeconds, setRestTimerSeconds] = useState<number | null>(null);
 
   // Set view state
-  const [repsInput, setRepsInput] = useState('');
+  const [repsInput, setRepsInput] = useState(0);
   const [weightInput, setWeightInput] = useState(0);
   const [notesInput, setNotesInput] = useState('');
   const [selectedRir, setSelectedRir] = useState<number | null>(null);
@@ -64,17 +57,17 @@ export default function ActiveWorkoutScreen() {
 
   // Exercise view: adding a warmup
   const [showWarmupForm, setShowWarmupForm] = useState(false);
-  const [warmupReps, setWarmupReps] = useState('5');
+  const [warmupReps, setWarmupReps] = useState(5);
   const [warmupWeight, setWarmupWeight] = useState(0);
 
   // Exercise view: adding a free set
   const [showAddSetForm, setShowAddSetForm] = useState(false);
-  const [addSetReps, setAddSetReps] = useState('');
+  const [addSetReps, setAddSetReps] = useState(0);
   const [addSetWeight, setAddSetWeight] = useState(0);
   const [addSetNotes, setAddSetNotes] = useState('');
 
   // Free exercise state
-  const [freeReps, setFreeReps] = useState('');
+  const [freeReps, setFreeReps] = useState(0);
   const [freeWeight, setFreeWeight] = useState(0);
   const [freeNotes, setFreeNotes] = useState('');
 
@@ -107,10 +100,10 @@ export default function ActiveWorkoutScreen() {
   // Load defaults when current set changes
   useEffect(() => {
     if (currentSet) {
-      setRepsInput(currentSet.reps != null ? String(currentSet.reps) : '');
+      setRepsInput(currentSet.reps ?? 0);
       setWeightInput(currentSet.weight ?? 0);
       setNotesInput('');
-      setSelectedRir(currentSet.estimated_rir);
+      setSelectedRir(currentSet.estimated_rir ?? targetRir ?? null);
     }
   }, [currentSet?.id]);
 
@@ -136,15 +129,14 @@ export default function ActiveWorkoutScreen() {
 
   const handleCompleteSet = async () => {
     if (!currentSet || !currentExercise) return;
-    const reps = parseInt(repsInput, 10);
-    if (isNaN(reps) || reps <= 0) {
+    if (repsInput <= 0) {
       alert('Please enter a valid number of reps.');
       return;
     }
     const restSecs = currentSet.rest_seconds ?? defaultRestSeconds;
 
     await completeSet(currentSet.id, {
-      reps,
+      reps: repsInput,
       weight: weightInput,
       notes: notesInput || undefined,
       estimatedRir: selectedRir ?? undefined,
@@ -204,39 +196,36 @@ export default function ActiveWorkoutScreen() {
 
   const handleCompleteFreeSet = async () => {
     if (!pendingExercise) return;
-    const reps = parseInt(freeReps, 10);
-    if (isNaN(reps) || reps <= 0) {
+    if (freeReps <= 0) {
       alert('Please enter a valid number of reps.');
       return;
     }
-    await addFreeSet(pendingExercise, { reps, weight: freeWeight, notes: freeNotes || undefined });
-    setFreeReps('');
+    await addFreeSet(pendingExercise, { reps: freeReps, weight: freeWeight, notes: freeNotes || undefined });
+    setFreeReps(0);
     setFreeNotes('');
     setRestTimerSeconds(defaultRestSeconds);
   };
 
   const handleAddWarmup = async () => {
     if (!currentExercise) return;
-    const reps = parseInt(warmupReps, 10);
-    if (isNaN(reps) || reps <= 0) return;
-    await addWarmupSet(currentExercise.exerciseName, { reps, weight: warmupWeight });
+    if (warmupReps <= 0) return;
+    await addWarmupSet(currentExercise.exerciseName, { reps: warmupReps, weight: warmupWeight });
     setShowWarmupForm(false);
   };
 
   const handleAddSet = async () => {
     if (!currentExercise || !workout) return;
-    const reps = parseInt(addSetReps, 10);
-    if (isNaN(reps) || reps <= 0) {
+    if (addSetReps <= 0) {
       alert('Please enter valid reps.');
       return;
     }
     await addFreeSet(currentExercise.exerciseName, {
-      reps,
+      reps: addSetReps,
       weight: addSetWeight,
       notes: addSetNotes || undefined,
     });
     setShowAddSetForm(false);
-    setAddSetReps('');
+    setAddSetReps(0);
     setAddSetNotes('');
   };
 
@@ -290,7 +279,7 @@ export default function ActiveWorkoutScreen() {
   const handleSelectExercise = (name: string) => {
     setShowExercisePicker(false);
     addFreeExercise(name);
-    setFreeReps('');
+    setFreeReps(0);
     setFreeWeight(0);
     setFreeNotes('');
     getExerciseHistory(name, 1).then((history) => {
@@ -530,13 +519,7 @@ export default function ActiveWorkoutScreen() {
           </div>
           <div style={{ marginTop: 24, textAlign: 'center' }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Reps</div>
-            <input
-              type="number"
-              value={freeReps}
-              onChange={(e) => setFreeReps(e.target.value)}
-              placeholder="0"
-              style={{ fontSize: 36, fontWeight: 800, textAlign: 'center', borderRadius: 12, padding: '12px 24px', minWidth: 120 }}
-            />
+            <NumberStepper value={freeReps} onChange={setFreeReps} />
           </div>
           <input
             type="text"
@@ -600,14 +583,8 @@ export default function ActiveWorkoutScreen() {
               <div className="card" style={{ textAlign: 'left', marginTop: 8 }}>
                 <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 12 }}>Add Warmup Set</div>
                 <WeightStepper value={warmupWeight} increment={weightIncrement} unit={weightUnit} onChange={setWarmupWeight} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>Reps:</span>
-                  <input
-                    type="number"
-                    value={warmupReps}
-                    onChange={(e) => setWarmupReps(e.target.value)}
-                    style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', minWidth: 60, borderRadius: 8, padding: '6px 16px' }}
-                  />
+                <div style={{ marginTop: 12 }}>
+                  <NumberStepper value={warmupReps} onChange={setWarmupReps} />
                 </div>
                 <div style={{ display: 'flex', gap: 16, marginTop: 12 }}>
                   <button onClick={handleAddWarmup} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 16, fontWeight: 600, cursor: 'pointer', padding: 0 }}>Log Warmup</button>
@@ -616,7 +593,7 @@ export default function ActiveWorkoutScreen() {
               </div>
             ) : (
               <button
-                onClick={() => { setWarmupWeight(0); setWarmupReps('5'); setShowWarmupForm(true); setShowAddSetForm(false); }}
+                onClick={() => { setWarmupWeight(0); setWarmupReps(5); setShowWarmupForm(true); setShowAddSetForm(false); }}
                 style={{ marginTop: 8, padding: 10, background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: 16, fontWeight: 600, cursor: 'pointer' }}
               >
                 + Add Warmup
@@ -628,14 +605,8 @@ export default function ActiveWorkoutScreen() {
               <div className="card" style={{ textAlign: 'left', marginTop: 8 }}>
                 <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 12 }}>Add Set</div>
                 <WeightStepper value={addSetWeight} increment={weightIncrement} unit={weightUnit} onChange={setAddSetWeight} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>Reps:</span>
-                  <input
-                    type="number"
-                    value={addSetReps}
-                    onChange={(e) => setAddSetReps(e.target.value)}
-                    style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', minWidth: 60, borderRadius: 8, padding: '6px 16px' }}
-                  />
+                <div style={{ marginTop: 12 }}>
+                  <NumberStepper value={addSetReps} onChange={setAddSetReps} />
                 </div>
                 <input
                   type="text"
@@ -653,7 +624,7 @@ export default function ActiveWorkoutScreen() {
               <button
                 onClick={() => {
                   setAddSetWeight(currentSet?.weight ?? completedSets[completedSets.length - 1]?.weight ?? 0);
-                  setAddSetReps('');
+                  setAddSetReps(0);
                   setAddSetNotes('');
                   setShowAddSetForm(true);
                   setShowWarmupForm(false);
@@ -721,43 +692,14 @@ export default function ActiveWorkoutScreen() {
           </div>
           <div style={{ marginTop: 24, textAlign: 'center' }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Reps</div>
-            <input
-              type="number"
-              value={repsInput}
-              onChange={(e) => setRepsInput(e.target.value)}
-              placeholder="0"
-              style={{ fontSize: 36, fontWeight: 800, textAlign: 'center', borderRadius: 12, padding: '12px 24px', minWidth: 120 }}
-            />
+            <NumberStepper value={repsInput} onChange={setRepsInput} />
           </div>
 
-          {/* RIR zone picker */}
+          {/* RIR stepper */}
           {isProgramWorkout && targetRir != null && !isCurrentSetWarmup && (
             <div style={{ marginTop: 24, textAlign: 'center' }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>How did it feel?</div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                {getRirZones(targetRir).map((zone) => (
-                  <button
-                    key={zone.label}
-                    onClick={() => setSelectedRir(zone.storedValue)}
-                    style={{
-                      flex: 1,
-                      borderRadius: 12,
-                      padding: 12,
-                      border: 'none',
-                      background: selectedRir === zone.storedValue ? 'var(--accent)' : 'var(--input-bg)',
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <div style={{ fontSize: 16, fontWeight: 700, color: selectedRir === zone.storedValue ? '#FFF' : 'var(--text)' }}>
-                      {zone.subtitle}
-                    </div>
-                    <div style={{ fontSize: 12, marginTop: 2, color: selectedRir === zone.storedValue ? 'rgba(255,255,255,0.7)' : 'var(--text-secondary)' }}>
-                      RIR {zone.label}
-                    </div>
-                  </button>
-                ))}
-              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>RIR</div>
+              <NumberStepper value={selectedRir ?? targetRir} onChange={setSelectedRir} />
             </div>
           )}
 
