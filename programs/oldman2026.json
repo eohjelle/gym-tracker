@@ -49,7 +49,7 @@
         {
           "name": "Calf Raise Machine",
           "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 90,
-          "superset_group": null, "starting_weight": 95,
+          "superset_group": null, "starting_weight": 50,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
         }
@@ -82,7 +82,7 @@
         {
           "name": "Hamstring Curl",
           "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 30,
-          "superset_group": "1", "starting_weight": 75,
+          "superset_group": "1", "starting_weight": 65,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
         },
