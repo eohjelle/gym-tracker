@@ -28,8 +28,8 @@
         {
           "name": "Lunges",
           "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 30,
-          "superset_group": "1", "starting_weight": 0,
-          "small_increment": 5, "large_increment": 10,
+          "superset_group": "1", "starting_weight": 30,
+          "small_increment": 2.5, "large_increment": 5,
           "warmup": null
         },
         {
