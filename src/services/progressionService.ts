@@ -6,7 +6,8 @@ export type ProgressionReasoning =
   | 'large_increase'
   | 'small_increase'
   | 'no_change'
-  | 'decrease';
+  | 'small_decrease'
+  | 'large_decrease';
 
 export interface ProgressionResult {
   suggestedWeight: number;
@@ -22,16 +23,23 @@ interface SessionSummary {
 }
 
 /**
- * Compute the suggested weight for an exercise based on its progression rules
- * and the last two sessions' performance.
+ * Compute the suggested weight for an exercise based on the effective-reps delta
+ * on the last working set of the previous session.
+ *
+ *   r_eff = reps + estimated_rir   (last working set)
+ *   r_tar = target_reps + target_rir
+ *   Δ     = r_eff − r_tar
+ *
+ *   Δ ≥ 4    → +large_increment
+ *   2 ≤ Δ ≤ 3 → +small_increment
+ *   −1 ≤ Δ ≤ 1 → maintain
+ *   −3 ≤ Δ ≤ −2 → −small_increment
+ *   Δ ≤ −4   → −large_increment
  */
 export function computeSuggestedWeight(
   exercise: ProgramExerciseRow,
-  lastSession: SessionSummary | null,
-  prevSession: SessionSummary | null,
-  prevSessionReasoning: ProgressionReasoning | null
+  lastSession: SessionSummary | null
 ): ProgressionResult {
-  // First session: use starting weight
   if (!lastSession || lastSession.estimated_rir === null) {
     return {
       suggestedWeight: exercise.starting_weight,
@@ -43,30 +51,9 @@ export function computeSuggestedWeight(
 
   const { target_rir, target_reps, small_increment, large_increment } = exercise;
   const { weight, reps, estimated_rir } = lastSession;
+  const delta = (reps + estimated_rir) - (target_reps + target_rir);
 
-  // Determine if last session was a "no change" outcome
-  const lastWasNoChange = prevSessionReasoning === 'no_change';
-
-  // Missed target reps => no change (or decrease if two in a row)
-  if (reps < target_reps) {
-    if (lastWasNoChange) {
-      return {
-        suggestedWeight: Math.max(0, weight - large_increment),
-        reasoning: 'decrease',
-        lastWeight: weight,
-        increment: -large_increment,
-      };
-    }
-    return {
-      suggestedWeight: weight,
-      reasoning: 'no_change',
-      lastWeight: weight,
-      increment: 0,
-    };
-  }
-
-  // RIR-based progression
-  if (estimated_rir > target_rir + 2) {
+  if (delta >= 4) {
     return {
       suggestedWeight: weight + large_increment,
       reasoning: 'large_increase',
@@ -74,8 +61,7 @@ export function computeSuggestedWeight(
       increment: large_increment,
     };
   }
-
-  if (estimated_rir >= target_rir) {
+  if (delta >= 2) {
     return {
       suggestedWeight: weight + small_increment,
       reasoning: 'small_increase',
@@ -83,30 +69,35 @@ export function computeSuggestedWeight(
       increment: small_increment,
     };
   }
-
-  // estimated_rir < target_rir => no change (or decrease if two in a row)
-  if (lastWasNoChange) {
+  if (delta >= -1) {
     return {
-      suggestedWeight: Math.max(0, weight - large_increment),
-      reasoning: 'decrease',
+      suggestedWeight: weight,
+      reasoning: 'no_change',
       lastWeight: weight,
-      increment: -large_increment,
+      increment: 0,
     };
   }
-
+  if (delta >= -3) {
+    return {
+      suggestedWeight: Math.max(0, weight - small_increment),
+      reasoning: 'small_decrease',
+      lastWeight: weight,
+      increment: -small_increment,
+    };
+  }
   return {
-    suggestedWeight: weight,
-    reasoning: 'no_change',
+    suggestedWeight: Math.max(0, weight - large_increment),
+    reasoning: 'large_decrease',
     lastWeight: weight,
-    increment: 0,
+    increment: -large_increment,
   };
 }
 
 /**
- * Get the last two sessions' last-set data for an exercise, used to compute
- * progression. A session only counts if the final planned working set
- * (highest set_number among non-warmup, non-extra sets) was completed.
- * If the last planned set was skipped, the whole workout is ignored.
+ * Get the last completed session's last-set data for an exercise. A session
+ * only counts if the final planned working set (highest set_number among
+ * non-warmup, non-extra sets) was completed. If the last planned set was
+ * skipped, the whole workout is ignored.
  *
  * Relies on these invariants, maintained elsewhere:
  *   1. All planned sets (warmups + working) are inserted upfront at workout
@@ -119,9 +110,9 @@ export function computeSuggestedWeight(
  * If any of these change, MAX(set_number) WHERE is_warmup=0 AND is_extra=0
  * may no longer identify the final planned working set and this query breaks.
  */
-export async function getLastTwoSessionsForExercise(
+export async function getLastSessionForExercise(
   exerciseName: string
-): Promise<{ lastSession: SessionSummary | null; prevSession: SessionSummary | null }> {
+): Promise<SessionSummary | null> {
   const db = getDatabase();
 
   const rows = await db.getAllAsync<{
@@ -146,36 +137,13 @@ export async function getLastTwoSessionsForExercise(
        AND w.status = 'completed'
        AND w.is_deload = 0
      ORDER BY w.start_time DESC
-     LIMIT 2`,
+     LIMIT 1`,
     [exerciseName]
   );
 
-  const sessions: SessionSummary[] = rows
-    .filter((r) => r.weight !== null && r.reps !== null)
-    .map((r) => ({ weight: r.weight, reps: r.reps, estimated_rir: r.estimated_rir }));
-
-  return {
-    lastSession: sessions[0] ?? null,
-    prevSession: sessions[1] ?? null,
-  };
-}
-
-/**
- * Compute the progression reasoning that would have been applied for a given session,
- * used to determine if the previous session was a "no change".
- */
-export function computeReasoningForSession(
-  exercise: ProgramExerciseRow,
-  session: SessionSummary | null
-): ProgressionReasoning | null {
-  if (!session || session.estimated_rir === null) return null;
-
-  const { target_rir, target_reps } = exercise;
-
-  if (session.reps < target_reps) return 'no_change';
-  if (session.estimated_rir > target_rir + 2) return 'large_increase';
-  if (session.estimated_rir >= target_rir) return 'small_increase';
-  return 'no_change';
+  const row = rows[0];
+  if (!row || row.weight === null || row.reps === null) return null;
+  return { weight: row.weight, reps: row.reps, estimated_rir: row.estimated_rir };
 }
 
 /**
@@ -184,9 +152,8 @@ export function computeReasoningForSession(
 export async function getProgressionForExercise(
   exercise: ProgramExerciseRow
 ): Promise<ProgressionResult> {
-  const { lastSession, prevSession } = await getLastTwoSessionsForExercise(exercise.name);
-  const prevReasoning = computeReasoningForSession(exercise, prevSession);
-  return computeSuggestedWeight(exercise, lastSession, prevSession, prevReasoning);
+  const lastSession = await getLastSessionForExercise(exercise.name);
+  return computeSuggestedWeight(exercise, lastSession);
 }
 
 /**
@@ -213,8 +180,10 @@ export function formatProgressionReasoning(result: ProgressionResult, unit: stri
     case 'small_increase':
       return `+${result.increment} ${unit} (good progress)`;
     case 'no_change':
-      return 'Same weight (needs more work)';
-    case 'decrease':
+      return 'Same weight (on target)';
+    case 'small_decrease':
+      return `${result.increment} ${unit} (backing off a bit)`;
+    case 'large_decrease':
       return `${result.increment} ${unit} (backing off)`;
   }
 }

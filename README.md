@@ -14,6 +14,26 @@ A Progressive Web App for tracking gym workouts with RIR-based progression, prog
 - **Offline support** — works without internet via service worker caching
 - **Installable** — add to home screen on iOS Safari
 
+## Progression rule
+
+After each workout, the next session's working weight is adjusted from the
+**last working set** of the previous session using the *effective-reps delta*:
+
+- `r_eff = reps + RIR` (last completed working set, ignoring warmups and extra sets)
+- `r_tar = target_reps + target_rir`
+- `Δ = r_eff − r_tar`
+
+| Δ              | Action            |
+|----------------|-------------------|
+| `Δ ≥ 4`        | + large_increment |
+| `2 ≤ Δ ≤ 3`    | + small_increment |
+| `−1 ≤ Δ ≤ 1`   | maintain          |
+| `−3 ≤ Δ ≤ −2`  | − small_increment |
+| `Δ ≤ −4`       | − large_increment |
+
+Increments are defined per-exercise in the program JSON. If the final planned
+working set was skipped, the whole session is ignored for progression.
+
 ## Tech Stack
 
 - React + TypeScript + Vite
