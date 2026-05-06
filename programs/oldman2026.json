@@ -149,14 +149,14 @@
         },
         {
           "name": "Pull-ups",
-          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 90,
           "superset_group": "1", "starting_weight": 100,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
         },
         {
           "name": "Dips",
-          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 90,
           "superset_group": "1", "starting_weight": 100,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
