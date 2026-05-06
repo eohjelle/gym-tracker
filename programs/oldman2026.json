@@ -33,23 +33,30 @@
           "warmup": null
         },
         {
-          "name": "Cable Fly",
+          "name": "Dumbbell Incline Press",
           "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 30,
-          "superset_group": "2", "starting_weight": 65,
+          "superset_group": "2", "starting_weight": 40,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
         },
         {
-          "name": "Reverse Cable Fly",
+          "name": "Dumbbell Incline Reverse Fly",
           "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 30,
-          "superset_group": "2", "starting_weight": 65,
+          "superset_group": "2", "starting_weight": 40,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
         },
         {
           "name": "Calf Raise Machine",
-          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 90,
-          "superset_group": null, "starting_weight": 45,
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 45,
+          "superset_group": "3", "starting_weight": 45,
+          "small_increment": 5, "large_increment": 10,
+          "warmup": null
+        },
+        {
+          "name": "Hanging Leg Raise",
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 45,
+          "superset_group": "3", "starting_weight": 0,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
         }
@@ -73,38 +80,52 @@
           "warmup": { "sets": 3, "min_weight": 45, "min_increment": 10 }
         },
         {
-          "name": "Cable Rows",
-          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 90,
-          "superset_group": null, "starting_weight": 95,
-          "small_increment": 5, "large_increment": 10,
-          "warmup": null
-        },
-        {
           "name": "Hamstring Curl",
-          "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 30,
+          "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 45,
           "superset_group": "1", "starting_weight": 65,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
         },
         {
           "name": "Lateral Raise",
-          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 30,
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 45,
           "superset_group": "1", "starting_weight": 20,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
         },
         {
+          "name": "Chest-Supported Dumbbell Rows",
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
+          "superset_group": "2", "starting_weight": 90,
+          "small_increment": 5, "large_increment": 10,
+          "warmup": null
+        },
+        {
+          "name": "Dumbbell Skullcrushers",
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
+          "superset_group": "2", "starting_weight": 30,
+          "small_increment": 2.5, "large_increment": 5,
+          "warmup": null
+        },
+        {
           "name": "Back Extensions",
-          "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 30,
-          "superset_group": "2", "starting_weight": 0,
+          "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 45,
+          "superset_group": "3", "starting_weight": 0,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
         },
         {
           "name": "Dumbbell Bicep Curl",
-          "sets": 3, "target_reps": 8, "target_rir": 2, "rest_seconds": 30,
-          "superset_group": "2", "starting_weight": 30,
+          "sets": 3, "target_reps": 8, "target_rir": 2, "rest_seconds": 45,
+          "superset_group": "3", "starting_weight": 30,
           "small_increment": 2.5, "large_increment": 5,
+          "warmup": null
+        },
+        {
+          "name": "Farmer Carry",
+          "sets": 3, "target_reps": 2, "target_rir": 2, "rest_seconds": 60,
+          "superset_group": null, "starting_weight": 120,
+          "small_increment": 5, "large_increment": 10,
           "warmup": null
         }
       ]
@@ -128,29 +149,50 @@
         },
         {
           "name": "Pull-ups",
-          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 120,
-          "superset_group": null, "starting_weight": 95,
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
+          "superset_group": "1", "starting_weight": 100,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
         },
         {
-          "name": "Cable Tricep Extension",
+          "name": "Dips",
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
+          "superset_group": "1", "starting_weight": 100,
+          "small_increment": 5, "large_increment": 10,
+          "warmup": null
+        },
+        {
+          "name": "Hip Abduction Machine",
           "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 30,
-          "superset_group": "1", "starting_weight": 20,
-          "small_increment": 2.5, "large_increment": 5,
+          "superset_group": "3", "starting_weight": 50,
+          "small_increment": 5, "large_increment": 10,
+          "warmup": null
+        },
+        {
+          "name": "Hip Adduction Machine",
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 30,
+          "superset_group": "3", "starting_weight": 50,
+          "small_increment": 5, "large_increment": 10,
           "warmup": null
         },
         {
           "name": "Face Pulls",
           "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 30,
-          "superset_group": "1", "starting_weight": 20,
+          "superset_group": "2", "starting_weight": 20,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
         },
         {
-          "name": "Cable Bicep Curls",
+          "name": "Cable External Rotation",
           "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 30,
-          "superset_group": "1", "starting_weight": 20,
+          "superset_group": "2", "starting_weight": 10,
+          "small_increment": 2.5, "large_increment": 5,
+          "warmup": null
+        },
+        {
+          "name": "Pallof Press",
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 30,
+          "superset_group": "2", "starting_weight": 20,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
         }
