@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigation } from '../context/NavigationContext';
-import { useActiveWorkout, ExerciseGroup } from '../context/ActiveWorkoutContext';
+import { useActiveWorkout, ExerciseGroup, findNextExerciseIndex } from '../context/ActiveWorkoutContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatDuration, formatWeight } from '../utils/formatters';
 import { getExerciseHistory } from '../db/repositories/setRepository';
@@ -23,6 +23,9 @@ export default function ActiveWorkoutScreen() {
     sets,
     currentExerciseIndex,
     setCurrentExerciseIndex,
+    skippedExercises,
+    skipExercise,
+    unskipExercise,
     completeSet,
     addFreeExercise,
     addFreeSet,
@@ -175,6 +178,7 @@ export default function ActiveWorkoutScreen() {
     if (currentExercise.groupTag) {
       const groupExercises = exercises.filter((e) => e.groupTag === currentExercise.groupTag);
       for (const ge of groupExercises) {
+        if (skippedExercises.has(ge.exerciseName)) continue;
         if (ge.sets.some((s) => s.completed_at == null)) {
           const idx = exercises.findIndex((e) => e.exerciseName === ge.exerciseName);
           if (idx >= 0) {
@@ -186,7 +190,10 @@ export default function ActiveWorkoutScreen() {
       }
     }
 
-    if (currentExercise.sets.some((s) => s.completed_at == null)) {
+    if (
+      !skippedExercises.has(currentExercise.exerciseName) &&
+      currentExercise.sets.some((s) => s.completed_at == null)
+    ) {
       setViewMode('set');
       return;
     }
@@ -276,6 +283,24 @@ export default function ActiveWorkoutScreen() {
     discardWorkout().then(() => goBack());
   };
 
+  const handleSkipExercise = () => {
+    if (!currentExercise) return;
+    const name = currentExercise.exerciseName;
+    skipExercise(name);
+    const nextSkipped = new Set(skippedExercises);
+    nextSkipped.add(name);
+    const nextIdx = findNextExerciseIndex(exercises, currentExerciseIndex, nextSkipped);
+    setEditingSetId(null);
+    setShowWarmupForm(false);
+    setShowAddSetForm(false);
+    if (nextIdx >= 0) {
+      setCurrentExerciseIndex(nextIdx);
+      setViewMode('exercise');
+    } else {
+      setViewMode('overview');
+    }
+  };
+
   const handleSelectExercise = (name: string) => {
     setShowExercisePicker(false);
     addFreeExercise(name);
@@ -310,17 +335,18 @@ export default function ActiveWorkoutScreen() {
     if (currentExercise.groupTag) {
       const groupExercises = exercises.filter((e) => e.groupTag === currentExercise.groupTag);
       for (const ge of groupExercises) {
+        if (skippedExercises.has(ge.exerciseName)) continue;
         const nextSet = ge.sets.find((s) => s.completed_at == null);
         if (nextSet) return toPreview(ge.exerciseName, nextSet);
       }
     }
 
-    const nextSet = currentExercise.sets.find((s) => s.completed_at == null);
-    if (nextSet) return toPreview(currentExercise.exerciseName, nextSet);
+    if (!skippedExercises.has(currentExercise.exerciseName)) {
+      const nextSet = currentExercise.sets.find((s) => s.completed_at == null);
+      if (nextSet) return toPreview(currentExercise.exerciseName, nextSet);
+    }
 
-    const nextIdx = exercises.findIndex((e, i) =>
-      i !== currentExerciseIndex && e.sets.some((s) => s.completed_at == null)
-    );
+    const nextIdx = findNextExerciseIndex(exercises, currentExerciseIndex, skippedExercises);
     if (nextIdx >= 0) {
       const nextEx = exercises[nextIdx];
       const next = nextEx.sets.find((s) => s.completed_at == null);
@@ -472,7 +498,12 @@ export default function ActiveWorkoutScreen() {
           <WorkoutOverview
             exercises={exercises}
             currentIndex={currentExerciseIndex}
+            skippedExercises={skippedExercises}
             onSelectExercise={(idx) => {
+              const ex = exercises[idx];
+              if (ex && skippedExercises.has(ex.exerciseName)) {
+                unskipExercise(ex.exerciseName);
+              }
               setCurrentExerciseIndex(idx);
               setViewMode('exercise');
               setEditingSetId(null);
@@ -635,10 +666,17 @@ export default function ActiveWorkoutScreen() {
               </button>
             )}
 
+            {hasUncompletedSets && (
+              <button
+                onClick={handleSkipExercise}
+                style={{ marginTop: 8, padding: 10, background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: 16, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Skip Exercise
+              </button>
+            )}
+
             {!hasUncompletedSets && (() => {
-              const nextIdx = exercises.findIndex((e, i) =>
-                i !== currentExerciseIndex && e.sets.some((s) => s.completed_at == null)
-              );
+              const nextIdx = findNextExerciseIndex(exercises, currentExerciseIndex, skippedExercises);
               if (nextIdx >= 0) {
                 return (
                   <button

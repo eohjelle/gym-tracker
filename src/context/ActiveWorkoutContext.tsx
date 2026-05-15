@@ -16,12 +16,32 @@ export interface ExerciseGroup {
   progression: ProgressionResult | null;
 }
 
+export function findNextExerciseIndex(
+  exercises: ExerciseGroup[],
+  currentIndex: number,
+  skipped: Set<string>
+): number {
+  const n = exercises.length;
+  if (n === 0) return -1;
+  for (let step = 1; step <= n; step++) {
+    const i = ((currentIndex + step) % n + n) % n;
+    if (i === currentIndex) continue;
+    const ex = exercises[i];
+    if (skipped.has(ex.exerciseName)) continue;
+    if (ex.sets.some((s) => s.completed_at == null)) return i;
+  }
+  return -1;
+}
+
 interface ActiveWorkoutContextValue {
   workout: WorkoutRow | null;
   sets: WorkoutSetRow[];
   exercises: ExerciseGroup[];
   currentExerciseIndex: number;
   setCurrentExerciseIndex: (index: number) => void;
+  skippedExercises: Set<string>;
+  skipExercise: (name: string) => void;
+  unskipExercise: (name: string) => void;
   startWorkout: (params: {
     programName?: string;
     week?: number;
@@ -61,6 +81,7 @@ export function ActiveWorkoutProvider({ children }: { children: React.ReactNode 
   const [workout, setWorkout] = useState<WorkoutRow | null>(null);
   const [sets, setSets] = useState<WorkoutSetRow[]>([]);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
+  const [skippedExercises, setSkippedExercises] = useState<Set<string>>(new Set());
   const [pendingExercise, setPendingExercise] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [programExerciseMap, setProgramExerciseMap] = useState<Map<string, ProgramExerciseRow>>(new Map());
@@ -136,6 +157,7 @@ export function ActiveWorkoutProvider({ children }: { children: React.ReactNode 
       });
       setWorkout(newWorkout);
       setCurrentExerciseIndex(0);
+      setSkippedExercises(new Set());
 
       // Store program exercise definitions and progressions
       if (params.programExercises) {
@@ -228,6 +250,7 @@ export function ActiveWorkoutProvider({ children }: { children: React.ReactNode 
     setWorkout(null);
     setSets([]);
     setCurrentExerciseIndex(0);
+    setSkippedExercises(new Set());
     setPendingExercise(null);
     setProgramExerciseMap(new Map());
     setProgressionMap(new Map());
@@ -252,10 +275,29 @@ export function ActiveWorkoutProvider({ children }: { children: React.ReactNode 
     setWorkout(null);
     setSets([]);
     setCurrentExerciseIndex(0);
+    setSkippedExercises(new Set());
     setPendingExercise(null);
     setProgramExerciseMap(new Map());
     setProgressionMap(new Map());
   }, [workout]);
+
+  const skipExercise = useCallback((name: string) => {
+    setSkippedExercises((prev) => {
+      if (prev.has(name)) return prev;
+      const next = new Set(prev);
+      next.add(name);
+      return next;
+    });
+  }, []);
+
+  const unskipExercise = useCallback((name: string) => {
+    setSkippedExercises((prev) => {
+      if (!prev.has(name)) return prev;
+      const next = new Set(prev);
+      next.delete(name);
+      return next;
+    });
+  }, []);
 
   return (
     <ActiveWorkoutContext.Provider
@@ -265,6 +307,9 @@ export function ActiveWorkoutProvider({ children }: { children: React.ReactNode 
         exercises,
         currentExerciseIndex,
         setCurrentExerciseIndex,
+        skippedExercises,
+        skipExercise,
+        unskipExercise,
         startWorkout,
         completeSet,
         addFreeExercise,

@@ -4,6 +4,7 @@ import { formatWeight } from '../utils/formatters';
 interface Props {
   exercises: ExerciseGroup[];
   currentIndex: number;
+  skippedExercises: Set<string>;
   onSelectExercise: (index: number) => void;
   weightUnit: 'kg' | 'lbs';
 }
@@ -11,6 +12,7 @@ interface Props {
 export default function WorkoutOverview({
   exercises,
   currentIndex,
+  skippedExercises,
   onSelectExercise,
   weightUnit,
 }: Props) {
@@ -23,6 +25,7 @@ export default function WorkoutOverview({
         const completedWarmups = warmupSets.filter((s) => s.completed_at != null);
         const totalSets = workingSets.length;
         const isComplete = completedSets.length === totalSets && totalSets > 0;
+        const isSkipped = skippedExercises.has(item.exerciseName);
         const isCurrent = index === currentIndex;
 
         return (
@@ -40,6 +43,7 @@ export default function WorkoutOverview({
               textAlign: 'left',
               cursor: 'pointer',
               color: 'var(--text)',
+              opacity: isSkipped && !isComplete ? 0.5 : 1,
             }}
           >
             <div>
@@ -65,6 +69,20 @@ export default function WorkoutOverview({
                     }}
                   >
                     SS
+                  </span>
+                )}
+                {isSkipped && !isComplete && (
+                  <span
+                    style={{
+                      background: 'var(--text-secondary)',
+                      color: '#FFF',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: 4,
+                    }}
+                  >
+                    SKIPPED
                   </span>
                 )}
               </div>
