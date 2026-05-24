@@ -20,29 +20,29 @@
         },
         {
           "name": "Dumbbell Overhead Press",
-          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 30,
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
           "superset_group": "1", "starting_weight": 30,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
         },
         {
           "name": "Lunges",
-          "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 30,
+          "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 60,
           "superset_group": "1", "starting_weight": 30,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
         },
         {
           "name": "Dumbbell Incline Press",
-          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 30,
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
           "superset_group": "2", "starting_weight": 40,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
         },
         {
           "name": "Dumbbell Incline Reverse Fly",
-          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 30,
-          "superset_group": "2", "starting_weight": 40,
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
+          "superset_group": "2", "starting_weight": 10,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
         },
@@ -54,8 +54,15 @@
           "warmup": null
         },
         {
-          "name": "Hanging Leg Raise",
+          "name": "Tibia Curl",
           "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 45,
+          "superset_group": "3", "starting_weight": 30,
+          "small_increment": 5, "large_increment": 10,
+          "warmup": null
+        },
+        {
+          "name": "Hanging Leg Raise",
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
           "superset_group": "3", "starting_weight": 0,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
@@ -81,21 +88,21 @@
         },
         {
           "name": "Farmer Carry",
-          "sets": 3, "target_reps": 2, "target_rir": 2, "rest_seconds": 60,
+          "sets": 3, "target_reps": 2, "target_rir": 2, "rest_seconds": 90,
           "superset_group": null, "starting_weight": 120,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
         },
         {
           "name": "Hamstring Curl",
-          "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 45,
+          "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 60,
           "superset_group": "1", "starting_weight": 65,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
         },
         {
           "name": "Lateral Raise",
-          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 45,
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
           "superset_group": "1", "starting_weight": 20,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
@@ -116,14 +123,14 @@
         },
         {
           "name": "Back Extensions",
-          "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 45,
+          "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 60,
           "superset_group": "3", "starting_weight": 0,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
         },
         {
           "name": "Dumbbell Bicep Curl",
-          "sets": 3, "target_reps": 8, "target_rir": 2, "rest_seconds": 45,
+          "sets": 3, "target_reps": 8, "target_rir": 2, "rest_seconds": 60,
           "superset_group": "3", "starting_weight": 30,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
