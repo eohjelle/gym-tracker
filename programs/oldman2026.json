@@ -88,7 +88,7 @@
         },
         {
           "name": "Farmer Carry",
-          "sets": 3, "target_reps": 2, "target_rir": 2, "rest_seconds": 90,
+          "sets": 3, "target_reps": 2, "target_rir": 0, "rest_seconds": 90,
           "superset_group": null, "starting_weight": 120,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
@@ -130,7 +130,7 @@
         },
         {
           "name": "Dumbbell Bicep Curl",
-          "sets": 3, "target_reps": 8, "target_rir": 2, "rest_seconds": 60,
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
           "superset_group": "3", "starting_weight": 30,
           "small_increment": 2.5, "large_increment": 5,
           "warmup": null
