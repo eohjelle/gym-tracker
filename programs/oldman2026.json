@@ -63,7 +63,7 @@
         {
           "name": "Hanging Leg Raise",
           "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
-          "superset_group": "3", "starting_weight": 0,
+          "superset_group": null, "starting_weight": 0,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
         }
@@ -80,17 +80,10 @@
           "warmup": { "sets": 3, "min_weight": 45, "min_increment": 10 }
         },
         {
-          "name": "Front Squat",
-          "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 120,
-          "superset_group": null, "starting_weight": 45,
-          "small_increment": 5, "large_increment": 10,
-          "warmup": { "sets": 3, "min_weight": 45, "min_increment": 10 }
-        },
-        {
           "name": "Farmer Carry",
           "sets": 3, "target_reps": 2, "target_rir": 0, "rest_seconds": 90,
           "superset_group": null, "starting_weight": 120,
-          "small_increment": 5, "large_increment": 10,
+          "small_increment": 10, "large_increment": 20,
           "warmup": null
         },
         {
@@ -119,6 +112,13 @@
           "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 60,
           "superset_group": "2", "starting_weight": 30,
           "small_increment": 2.5, "large_increment": 5,
+          "warmup": null
+        },
+        {
+          "name": "Seated one leg press",
+          "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 90,
+          "superset_group": null, "starting_weight": 170,
+          "small_increment": 5, "large_increment": 10,
           "warmup": null
         },
         {
