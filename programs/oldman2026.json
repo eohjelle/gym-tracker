@@ -87,9 +87,9 @@
           "warmup": null
         },
         {
-          "name": "Hamstring Curl",
+          "name": "One Legged Hamstring Curl",
           "sets": 3, "target_reps": 10, "target_rir": 4, "rest_seconds": 60,
-          "superset_group": "1", "starting_weight": 65,
+          "superset_group": "1", "starting_weight": 35,
           "small_increment": 5, "large_increment": 10,
           "warmup": null
         },
@@ -115,7 +115,7 @@
           "warmup": null
         },
         {
-          "name": "Seated one leg press",
+          "name": "Seated One Legged Press",
           "sets": 3, "target_reps": 10, "target_rir": 2, "rest_seconds": 90,
           "superset_group": null, "starting_weight": 170,
           "small_increment": 5, "large_increment": 10,
